@@ -139,11 +139,12 @@ export default function SpeechInputControls({
       <div className="bg-white rounded-2xl shadow-lg border border-[#E5E7EB] px-3 py-3">
         {/* Media Previews */}
         {uploadedFiles.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2 justify-start">
+          <div className="mb-3 flex flex-nowrap gap-2 justify-start overflow-x-auto">
             {uploadedFiles.map((file, index) => (
               <MediaPreview
                 key={index}
                 file={file}
+                fileCount={uploadedFiles.length}
                 onRemove={() => handleRemoveFile(index)}
               />
             ))}

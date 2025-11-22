@@ -23,6 +23,7 @@ type ConversationState = "idle" | "listening" | "thinking" | "speaking";
 export default function VoiceChatContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isVoiceMode, setIsVoiceMode] = useState(true);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [conversationState, setConversationState] =
     useState<ConversationState>("idle");
   const [showTranscript, setShowTranscript] = useState(false);
@@ -403,6 +404,11 @@ export default function VoiceChatContainer() {
                           >
                             <motion.div
                               whileHover={{ scale: 1.02 }}
+                              onClick={() => {
+                                if (message.mediaType !== "video") {
+                                  setPreviewImage(message.mediaUrl!);
+                                }
+                              }}
                               className="max-w-xs rounded-xl overflow-hidden shadow-md border border-[#E5E7EB] cursor-pointer"
                             >
                               {message.mediaType === "video" ? (
@@ -658,6 +664,56 @@ export default function VoiceChatContainer() {
                 />
               </svg>
             </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Image Preview Modal */}
+      <AnimatePresence>
+        {previewImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setPreviewImage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="relative max-w-7xl max-h-[90vh] w-full h-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="relative w-full h-full">
+                <img
+                  src={previewImage}
+                  alt="Preview"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+
+              {/* Close button */}
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="absolute top-4 right-4 w-10 h-10 bg-white/10 backdrop-blur-sm text-white rounded-full flex items-center justify-center hover:bg-white/20 transition-colors"
+                aria-label="Close preview"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
