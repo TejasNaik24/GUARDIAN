@@ -113,9 +113,96 @@ npm run dev
 
 **Frontend Structure:**
 
-- `pages/` – Main UI pages
+- `app/` – Next.js App Router pages (landing, chat)
 - `components/` – Reusable React components
-- `styles/` – Tailwind CSS setup
+  - `landing/` – Landing page sections
+  - `speechUI/` – Voice chat interface components
+- `hooks/` – Custom React hooks for voice interaction
+- `styles/` – Tailwind CSS configuration
+
+---
+
+## 🎙️ Voice Chat System
+
+Guardian features a **voice-first** interface that allows users to speak with the AI and receive spoken responses.
+
+### Architecture
+
+#### Core Components
+
+**1. useVoiceChat Hook** (`hooks/useVoiceChat.ts`)
+
+Central state management for voice interactions:
+
+- **State:** `messages`, `conversationState` (idle/listening/thinking/speaking), `isListening`, `isSpeaking`, `currentTranscript`, `isLoading`
+- **Actions:** `startVoiceInput()`, `stopVoiceInput()`, `sendMessage(text, confidence)`, `clearMessages()`
+
+**2. MicrophoneButton** (`components/speechUI/MicrophoneButton.tsx`)
+
+Interactive microphone control with:
+
+- Pulsing blue rings when listening
+- Red background when active
+- Three size variants (sm/md/lg)
+- Smooth Framer Motion animations
+
+**3. VoiceMessageBubble** (`components/speechUI/VoiceMessageBubble.tsx`)
+
+Message display with:
+
+- AI confidence scores (0-1 scale)
+- Urgency indicators (high/medium/low with color-coded borders)
+- Speaking animation with sound wave bars
+- Timestamps
+
+**4. GuardianAvatar** (`components/speechUI/GuardianAvatar.tsx`)
+
+Animated avatar with state-based animations:
+
+- **Idle:** Static state
+- **Listening:** Scales 1.3x with blue pulsing rings
+- **Thinking:** Pulse animation with rotating dots
+- **Speaking:** Scales 0.8-1.1x with green rings
+
+**5. LoadingIndicator** (`components/speechUI/LoadingIndicator.tsx`)
+
+AI thinking state with animated dots and customizable message.
+
+#### Web Speech API Integration
+
+- **Speech Recognition:** Browser's `SpeechRecognition` API for continuous listening with real-time transcription
+- **Speech Synthesis:** Browser's `SpeechSynthesis` API for AI voice responses with interruption support
+
+#### State Flow
+
+```
+1. User presses mic → isListening = true
+2. User speaks → transcript updates in real-time
+3. User stops → isListening = false
+4. Hook detects transcript → sends message
+5. conversationState = "thinking"
+6. AI responds → message added
+7. conversationState = "speaking"
+8. Speech synthesis plays response
+9. Playback ends → conversationState = "idle"
+```
+
+#### Usage
+
+```tsx
+import SimpleVoiceChatContainer from "@/components/speechUI/SimpleVoiceChatContainer";
+
+export default function ChatPage() {
+  return <SimpleVoiceChatContainer />;
+}
+```
+
+**Browser Compatibility:**
+
+- Chrome/Edge: Full support
+- Safari: Partial support (prefix required)
+- Firefox: Limited support
+- Mobile: iOS Safari, Chrome Android
 
 ---
 
