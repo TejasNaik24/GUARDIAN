@@ -355,28 +355,9 @@ export default function VoiceChatContainer() {
               {/* Empty State or Messages */}
               {displayMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
-                  <div className="bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
-                    <svg
-                      className="w-8 h-8 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                      />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-[#1E3A8A] mb-2">
-                    Welcome to Guardian
+                  <h3 className="text-2xl font-semibold text-[#1E3A8A] mb-8">
+                    How can I help you today?
                   </h3>
-                  <p className="text-[#64748B] max-w-md mb-8">
-                    Type your message below or switch to voice mode to speak
-                    naturally.
-                  </p>
 
                   {/* Centered input box for empty state */}
                   <div className="w-full max-w-3xl px-4">
