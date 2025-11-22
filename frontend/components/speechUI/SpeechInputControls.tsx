@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import MicButton from "./MicButton";
 import MediaPreview from "./MediaPreview";
 import useSpeechRecognition from "@/hooks/useSpeechRecognition";
@@ -16,6 +16,8 @@ interface SpeechInputControlsProps {
   currentTranscript?: string;
 }
 
+const MAX_FILES = 4;
+
 export default function SpeechInputControls({
   isVoiceMode,
   onToggleMode,
@@ -26,7 +28,7 @@ export default function SpeechInputControls({
   currentTranscript = "",
 }: SpeechInputControlsProps) {
   const [textInput, setTextInput] = useState("");
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isDictating, setIsDictating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -67,30 +69,48 @@ export default function SpeechInputControls({
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      const validTypes = ["image/jpeg", "image/jpg", "image/png", "video/mp4"];
+    const files = e.target.files;
+    if (!files) return;
+
+    const validTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "video/mp4",
+      "audio/mpeg",
+      "audio/mp3",
+      "audio/wav",
+    ];
+    const newFiles: File[] = [];
+
+    // Validate each file
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       if (validTypes.includes(file.type)) {
-        setUploadedFile(file);
-      } else {
-        alert("Please upload a valid image (JPG, PNG) or video (MP4) file.");
+        newFiles.push(file);
       }
     }
-  };
 
-  const handleRemoveFile = () => {
-    setUploadedFile(null);
+    // Add files up to the limit
+    const remainingSlots = MAX_FILES - uploadedFiles.length;
+    setUploadedFiles([...uploadedFiles, ...newFiles.slice(0, remainingSlots)]);
+
+    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles(uploadedFiles.filter((_, i) => i !== index));
+  };
+
   const handleSend = () => {
-    if (textInput.trim() || uploadedFile) {
-      onSendMessage(textInput.trim(), uploadedFile || undefined);
+    if (textInput.trim() || uploadedFiles.length > 0) {
+      // For now, send with first file (backend will be updated later for multiple)
+      onSendMessage(textInput.trim(), uploadedFiles[0] || undefined);
       setTextInput("");
-      setUploadedFile(null);
+      setUploadedFiles([]);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -117,10 +137,16 @@ export default function SpeechInputControls({
     <div className="w-full">
       {/* Input Area */}
       <div className="bg-white rounded-2xl shadow-lg border border-[#E5E7EB] px-3 py-3">
-        {/* Media Preview */}
-        {uploadedFile && (
-          <div className="mb-3">
-            <MediaPreview file={uploadedFile} onRemove={handleRemoveFile} />
+        {/* Media Previews */}
+        {uploadedFiles.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2 justify-start">
+            {uploadedFiles.map((file, index) => (
+              <MediaPreview
+                key={index}
+                file={file}
+                onRemove={() => handleRemoveFile(index)}
+              />
+            ))}
           </div>
         )}
 
@@ -143,27 +169,47 @@ export default function SpeechInputControls({
                 disabled={disabled}
               />
 
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => fileInputRef.current?.click()}
-                className="p-3 rounded-xl bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] transition-colors shadow-sm cursor-pointer"
-                aria-label="Upload media"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+              <div className="relative group">
+                <motion.button
+                  whileHover={{
+                    scale: uploadedFiles.length >= MAX_FILES ? 1 : 1.05,
+                  }}
+                  whileTap={{
+                    scale: uploadedFiles.length >= MAX_FILES ? 1 : 0.95,
+                  }}
+                  onClick={() =>
+                    uploadedFiles.length < MAX_FILES &&
+                    fileInputRef.current?.click()
+                  }
+                  disabled={uploadedFiles.length >= MAX_FILES}
+                  className={`p-3 rounded-xl transition-colors shadow-sm ${
+                    uploadedFiles.length >= MAX_FILES
+                      ? "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
+                      : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] cursor-pointer"
+                  }`}
+                  aria-label="Upload media"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-              </motion.button>
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                </motion.button>
+                {uploadedFiles.length >= MAX_FILES && (
+                  <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    You can only upload {MAX_FILES} files
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {currentTranscript && (
@@ -178,7 +224,7 @@ export default function SpeechInputControls({
             )}
 
             {/* Send button appears when there's content */}
-            {(currentTranscript || uploadedFile) && (
+            {(currentTranscript || uploadedFiles.length > 0) && (
               <motion.button
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -212,31 +258,52 @@ export default function SpeechInputControls({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/jpg,image/png,video/mp4"
+              accept="image/jpeg,image/jpg,image/png,video/mp4,audio/mpeg,audio/mp3,audio/wav"
+              multiple
               onChange={handleFileSelect}
               className="hidden"
             />
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => fileInputRef.current?.click()}
-              className="shrink-0 p-2 rounded-lg bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] transition-colors cursor-pointer"
-              aria-label="Upload media"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+            <div className="relative group shrink-0">
+              <motion.button
+                whileHover={{
+                  scale: uploadedFiles.length >= MAX_FILES ? 1 : 1.05,
+                }}
+                whileTap={{
+                  scale: uploadedFiles.length >= MAX_FILES ? 1 : 0.95,
+                }}
+                onClick={() =>
+                  uploadedFiles.length < MAX_FILES &&
+                  fileInputRef.current?.click()
+                }
+                disabled={uploadedFiles.length >= MAX_FILES}
+                className={`p-2 rounded-lg transition-colors ${
+                  uploadedFiles.length >= MAX_FILES
+                    ? "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
+                    : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] cursor-pointer"
+                }`}
+                aria-label="Upload media"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-            </motion.button>
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+              </motion.button>
+              {uploadedFiles.length >= MAX_FILES && (
+                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                  You can only upload {MAX_FILES} files
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              )}
+            </div>
 
             {/* Text Input */}
             <textarea
@@ -303,13 +370,17 @@ export default function SpeechInputControls({
             {/* Send Button */}
             <motion.button
               whileHover={{
-                scale: textInput.trim() || uploadedFile ? 1.05 : 1,
+                scale: textInput.trim() || uploadedFiles.length > 0 ? 1.05 : 1,
               }}
-              whileTap={{ scale: textInput.trim() || uploadedFile ? 0.95 : 1 }}
+              whileTap={{
+                scale: textInput.trim() || uploadedFiles.length > 0 ? 0.95 : 1,
+              }}
               onClick={handleSend}
-              disabled={disabled || (!textInput.trim() && !uploadedFile)}
+              disabled={
+                disabled || (!textInput.trim() && uploadedFiles.length === 0)
+              }
               className={`shrink-0 p-2 rounded-lg transition-all ${
-                (textInput.trim() || uploadedFile) && !disabled
+                (textInput.trim() || uploadedFiles.length > 0) && !disabled
                   ? "bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] text-white shadow-md hover:shadow-lg cursor-pointer"
                   : "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
               }`}

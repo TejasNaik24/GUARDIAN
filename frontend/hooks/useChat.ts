@@ -29,7 +29,7 @@ interface UseChatReturn {
   messages: ChatMessage[];
   input: string;
   setInput: (value: string) => void;
-  sendMessage: () => Promise<void>;
+  sendMessage: (messageText?: string, mediaFiles?: File[]) => Promise<void>;
   isLoading: boolean;
   attachments: File[];
   addAttachment: (file: File) => void;
@@ -113,68 +113,77 @@ export default function useChat(): UseChatReturn {
 
   /**
    * Send a message to the backend and add response to chat
+   * @param messageText - Optional message text (defaults to current input state)
+   * @param mediaFiles - Optional media files (defaults to current attachments state)
    */
-  const sendMessage = useCallback(async () => {
-    // Validate input
-    if (!input.trim() && attachments.length === 0) {
-      return;
-    }
+  const sendMessage = useCallback(
+    async (messageText?: string, mediaFiles?: File[]) => {
+      // Use provided values or fall back to state
+      const textToSend = messageText !== undefined ? messageText : input;
+      const filesToSend = mediaFiles !== undefined ? mediaFiles : attachments;
 
-    // Create user message
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: input.trim() || "Sent media",
-      timestamp: new Date(),
-      media: attachments.length > 0 ? [...attachments] : undefined,
-    };
+      // Validate input
+      if (!textToSend.trim() && filesToSend.length === 0) {
+        return;
+      }
 
-    // Add user message to chat
-    setMessages((prev) => [...prev, userMessage]);
-
-    // Clear input and attachments
-    const currentInput = input;
-    const currentAttachments = [...attachments];
-    setInput("");
-    setAttachments([]);
-
-    // Set loading state
-    setIsLoading(true);
-
-    try {
-      // Call backend API
-      const response = await callBackend({
-        message: currentInput,
-        media: currentAttachments.length > 0 ? currentAttachments : undefined,
-      });
-
-      // Create assistant message
-      const assistantMessage: ChatMessage = {
-        id: `assistant-${Date.now()}`,
-        role: response.role,
-        content: response.content,
+      // Create user message
+      const userMessage: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: textToSend.trim() || "Sent media",
         timestamp: new Date(),
+        media: filesToSend.length > 0 ? [...filesToSend] : undefined,
       };
 
-      // Add assistant message to chat
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error("Failed to send message:", error);
+      // Add user message to chat
+      setMessages((prev) => [...prev, userMessage]);
 
-      // Add error message to chat
-      const errorMessage: ChatMessage = {
-        id: `error-${Date.now()}`,
-        role: "assistant",
-        content:
-          "I'm having trouble connecting right now. Please try again in a moment. If this is urgent, please call 911 or visit your nearest emergency room.",
-        timestamp: new Date(),
-      };
+      // Clear input and attachments
+      const currentInput = textToSend;
+      const currentAttachments = [...filesToSend];
+      setInput("");
+      setAttachments([]);
 
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [input, attachments]);
+      // Set loading state immediately after user message is added
+      setIsLoading(true);
+
+      try {
+        // Call backend API
+        const response = await callBackend({
+          message: currentInput,
+          media: currentAttachments.length > 0 ? currentAttachments : undefined,
+        });
+
+        // Create assistant message
+        const assistantMessage: ChatMessage = {
+          id: `assistant-${Date.now()}`,
+          role: response.role,
+          content: response.content,
+          timestamp: new Date(),
+        };
+
+        // Add assistant message to chat
+        setMessages((prev) => [...prev, assistantMessage]);
+      } catch (error) {
+        console.error("Failed to send message:", error);
+
+        // Add error message to chat
+        const errorMessage: ChatMessage = {
+          id: `error-${Date.now()}`,
+          role: "assistant",
+          content:
+            "I'm having trouble connecting right now. Please try again in a moment. If this is urgent, please call 911 or visit your nearest emergency room.",
+          timestamp: new Date(),
+        };
+
+        setMessages((prev) => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [input, attachments]
+  );
 
   // ============================================================================
   // ATTACHMENT HANDLING

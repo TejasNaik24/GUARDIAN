@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import GuardianAvatar from "./GuardianAvatar";
 import SpeechInputControls from "./SpeechInputControls";
 import useSpeechRecognition from "@/hooks/useSpeechRecognition";
 import useSpeechSynthesis from "@/hooks/useSpeechSynthesis";
+import useChat from "@/hooks/useChat";
 
 interface Message {
   id: string;
@@ -27,7 +29,20 @@ export default function VoiceChatContainer() {
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Chat hook for text mode
+  const {
+    messages: chatMessages,
+    input: chatInput,
+    setInput: setChatInput,
+    sendMessage: sendChatMessage,
+    isLoading: isChatLoading,
+    attachments,
+    addAttachment,
+    removeAttachment,
+  } = useChat();
 
   // Speech hooks
   const {
@@ -40,14 +55,52 @@ export default function VoiceChatContainer() {
 
   const { speak, isSpeaking } = useSpeechSynthesis();
 
-  // Auto-scroll transcript
-  useEffect(() => {
-    if (showTranscript) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, showTranscript]);
+  // Convert chat messages to display messages for text mode
+  const displayMessages: Message[] = isVoiceMode
+    ? messages
+    : chatMessages.map((msg) => {
+        // Create media URLs for files
+        const mediaUrl =
+          msg.media && msg.media.length > 0
+            ? URL.createObjectURL(msg.media[0])
+            : undefined;
+        const mediaType =
+          msg.media && msg.media[0]?.type.startsWith("video/")
+            ? "video"
+            : msg.media && msg.media[0]
+            ? "image"
+            : undefined;
 
-  // Auto-hide disclaimer
+        return {
+          id: msg.id,
+          text: msg.content,
+          isUser: msg.role === "user",
+          timestamp: msg.timestamp.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+          mediaUrl,
+          mediaType,
+        };
+      });
+
+  // Auto-scroll to bottom when USER sends a message (ChatGPT-style)
+  useEffect(() => {
+    // Only scroll if there are at least 2 messages (skip first message)
+    if (displayMessages.length <= 1) return;
+
+    const lastMessage = displayMessages[displayMessages.length - 1];
+    if (lastMessage.isUser) {
+      // User sent a message, scroll to bottom
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+          inline: "nearest",
+        });
+      }, 0);
+    }
+  }, [displayMessages]); // Auto-hide disclaimer
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowDisclaimer(false);
@@ -57,31 +110,49 @@ export default function VoiceChatContainer() {
 
   // Update conversation state based on speech status
   useEffect(() => {
-    if (isListening && !isMuted) {
-      setConversationState("listening");
-    } else if (isSpeaking) {
-      setConversationState("speaking");
-    } else if (conversationState === "listening" && !isListening) {
-      // Just stopped listening, about to process
-      if (transcript) {
+    if (isVoiceMode) {
+      if (isListening && !isMuted) {
+        setConversationState("listening");
+      } else if (isSpeaking) {
+        setConversationState("speaking");
+      } else if (conversationState === "listening" && !isListening) {
+        // Just stopped listening, about to process
+        if (transcript) {
+          setConversationState("thinking");
+        } else {
+          setConversationState("idle");
+        }
+      } else if (!isListening && !isSpeaking) {
+        setConversationState("idle");
+      }
+    } else {
+      // Text mode - use chat loading state
+      if (isChatLoading) {
         setConversationState("thinking");
       } else {
         setConversationState("idle");
       }
-    } else if (!isListening && !isSpeaking) {
-      setConversationState("idle");
     }
-  }, [isListening, isSpeaking, isMuted, transcript]);
+  }, [
+    isListening,
+    isSpeaking,
+    isMuted,
+    transcript,
+    isVoiceMode,
+    isChatLoading,
+    conversationState,
+  ]);
 
   // Handle voice input completion
   useEffect(() => {
     if (transcript && !isListening && !isMuted) {
-      handleSendMessage(transcript);
+      handleVoiceSendMessage(transcript);
       resetTranscript();
     }
   }, [isListening]);
 
-  const handleSendMessage = (text: string, media?: File) => {
+  // Voice mode message handler (keeps old logic for voice)
+  const handleVoiceSendMessage = (text: string, media?: File) => {
     if (!text.trim() && !media) return;
 
     // Create media URL if file is present
@@ -129,6 +200,13 @@ export default function VoiceChatContainer() {
     }, 2000);
   };
 
+  // Text mode message handler (uses chat hook)
+  const handleTextSendMessage = (text: string, media?: File) => {
+    if (!text.trim() && !media) return;
+
+    // Call sendMessage directly with the values - no state sync needed
+    sendChatMessage(text, media ? [media] : []);
+  };
   const handleToggleMic = () => {
     setIsMuted(!isMuted);
     if (!isMuted) {
@@ -141,7 +219,7 @@ export default function VoiceChatContainer() {
     if (file) {
       const validTypes = ["image/jpeg", "image/jpg", "image/png", "video/mp4"];
       if (validTypes.includes(file.type)) {
-        handleSendMessage("Uploaded media", file);
+        handleVoiceSendMessage("Uploaded media", file);
       } else {
         alert("Please upload a valid image (JPG, PNG) or video (MP4) file.");
       }
@@ -248,6 +326,7 @@ export default function VoiceChatContainer() {
 
       {/* Main Content Area */}
       <motion.div
+        ref={messagesContainerRef}
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
@@ -265,8 +344,8 @@ export default function VoiceChatContainer() {
             /* Text Mode - Full Chat View */
             <>
               {/* Empty State or Messages */}
-              {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center py-12">
+              {displayMessages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
                   <div className="bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
                     <svg
                       className="w-8 h-8 text-white"
@@ -285,35 +364,37 @@ export default function VoiceChatContainer() {
                   <h3 className="text-xl font-semibold text-[#1E3A8A] mb-2">
                     Welcome to Guardian
                   </h3>
-                  <p className="text-[#64748B] max-w-md mb-6">
+                  <p className="text-[#64748B] max-w-md mb-8">
                     Type your message below or switch to voice mode to speak
                     naturally.
                   </p>
+
+                  {/* Centered input box for empty state */}
+                  <div className="w-full max-w-3xl px-4">
+                    <SpeechInputControls
+                      isVoiceMode={isVoiceMode}
+                      onToggleMode={handleToggleMode}
+                      isListening={isListening}
+                      onToggleMic={() => {}}
+                      onSendMessage={handleTextSendMessage}
+                      disabled={isChatLoading}
+                      currentTranscript={transcript}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <AnimatePresence mode="popLayout">
-                    {messages.map((message, index) => (
+                    {displayMessages.map((message, index) => (
                       <motion.div
                         key={message.id}
-                        initial={{
-                          opacity: 0,
-                          x: message.isUser ? 50 : -50,
-                          y: 20,
-                        }}
-                        animate={{ opacity: 1, x: 0, y: 0 }}
-                        transition={{
-                          duration: 0.4,
-                          delay: index * 0.1,
-                          ease: "easeOut",
-                        }}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.15, ease: "easeOut" }}
                       >
                         {/* Media attachment - show first */}
                         {message.mediaUrl && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.8, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            transition={{ duration: 0.5, ease: "easeOut" }}
+                          <div
                             className={`mb-3 ${
                               message.isUser
                                 ? "flex justify-end"
@@ -338,7 +419,7 @@ export default function VoiceChatContainer() {
                                 />
                               )}
                             </motion.div>
-                          </motion.div>
+                          </div>
                         )}
                         {/* Text message bubble */}
                         <div
@@ -368,21 +449,64 @@ export default function VoiceChatContainer() {
                               </p>
                             </motion.div>
                             {message.timestamp && (
-                              <motion.span
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: 0.3 }}
-                                className="text-xs text-[#64748B] mt-1 px-2"
-                              >
+                              <span className="text-xs text-[#64748B] mt-1 px-2">
                                 {message.timestamp}
-                              </motion.span>
+                              </span>
                             )}
                           </div>
                         </div>
                       </motion.div>
                     ))}
                   </AnimatePresence>
-                  <div ref={messagesEndRef} />
+
+                  {/* Loading indicator */}
+                  {isChatLoading && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="flex justify-start mb-4"
+                    >
+                      <div className="bg-white rounded-2xl px-5 py-3 shadow-sm border border-[#E5E7EB]">
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1">
+                            <motion.div
+                              animate={{ scale: [1, 1.2, 1] }}
+                              transition={{
+                                duration: 0.6,
+                                repeat: Infinity,
+                                delay: 0,
+                              }}
+                              className="w-2 h-2 bg-[#3B82F6] rounded-full"
+                            />
+                            <motion.div
+                              animate={{ scale: [1, 1.2, 1] }}
+                              transition={{
+                                duration: 0.6,
+                                repeat: Infinity,
+                                delay: 0.2,
+                              }}
+                              className="w-2 h-2 bg-[#3B82F6] rounded-full"
+                            />
+                            <motion.div
+                              animate={{ scale: [1, 1.2, 1] }}
+                              transition={{
+                                duration: 0.6,
+                                repeat: Infinity,
+                                delay: 0.4,
+                              }}
+                              className="w-2 h-2 bg-[#3B82F6] rounded-full"
+                            />
+                          </div>
+                          <span className="text-sm text-[#64748B]">
+                            Guardian is thinking...
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  <div ref={messagesEndRef} className="h-[53vh]" />
                 </div>
               )}
             </>
@@ -395,7 +519,11 @@ export default function VoiceChatContainer() {
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-        className="px-4 md:px-6 py-6 pb-6 fixed bottom-0 left-0 right-0 md:relative"
+        className={`px-4 md:px-6 py-6 pb-6 ${
+          displayMessages.length === 0 && !isVoiceMode
+            ? "hidden"
+            : "fixed bottom-0 left-0 right-0 md:relative"
+        }`}
       >
         <div className="max-w-3xl mx-auto">
           {isVoiceMode ? (
@@ -489,8 +617,8 @@ export default function VoiceChatContainer() {
               onToggleMode={handleToggleMode}
               isListening={isListening}
               onToggleMic={() => {}}
-              onSendMessage={handleSendMessage}
-              disabled={conversationState === "thinking"}
+              onSendMessage={handleTextSendMessage}
+              disabled={isChatLoading}
               currentTranscript={transcript}
             />
           )}

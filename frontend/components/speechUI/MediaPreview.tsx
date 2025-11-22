@@ -18,7 +18,7 @@ export default function MediaPreview({ file, onRemove }: MediaPreviewProps) {
         initial={{ opacity: 0, y: 10, scale: 0.9 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 10, scale: 0.9 }}
-        className="relative inline-block mb-3"
+        className="relative inline-block"
       >
         <div className="relative bg-white rounded-xl border-2 border-[#E5E7EB] overflow-hidden shadow-md">
           {isVideo ? (
