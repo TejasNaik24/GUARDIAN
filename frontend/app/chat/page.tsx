@@ -1,5 +1,5 @@
-import SpeechChatContainer from "@/components/speechUI/SpeechChatContainer";
+import VoiceChatContainer from "@/components/speechUI/VoiceChatContainer";
 
 export default function ChatPage() {
-  return <SpeechChatContainer />;
+  return <VoiceChatContainer />;
 }
