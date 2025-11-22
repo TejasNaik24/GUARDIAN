@@ -31,6 +31,7 @@ export default function VoiceChatContainer() {
   const [isMuted, setIsMuted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const lastMessageRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Chat hook for text mode
@@ -92,14 +93,19 @@ export default function VoiceChatContainer() {
 
     const lastMessage = displayMessages[displayMessages.length - 1];
     if (lastMessage.isUser) {
-      // User sent a message, scroll to bottom
+      // User sent a message, scroll to show the message
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-          inline: "nearest",
-        });
-      }, 0);
+        // Find the last message element by data attribute
+        const messageElements = document.querySelectorAll("[data-message-id]");
+        const lastMessageElement = messageElements[messageElements.length - 1];
+        if (lastMessageElement) {
+          lastMessageElement.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+            inline: "nearest",
+          });
+        }
+      }, 100); // Small delay to ensure DOM is updated
     }
   }, [displayMessages]); // Auto-hide disclaimer
   useEffect(() => {
@@ -331,7 +337,9 @@ export default function VoiceChatContainer() {
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
-        className="flex-1 overflow-y-auto px-4 md:px-6 py-6 pb-24 md:pb-6"
+        className={`flex-1 px-4 md:px-6 py-6 pb-24 md:pb-6 ${
+          displayMessages.length <= 1 ? "overflow-hidden" : "overflow-y-auto"
+        }`}
       >
         <div className="max-w-4xl mx-auto">
           {isVoiceMode ? (
@@ -386,9 +394,10 @@ export default function VoiceChatContainer() {
               ) : (
                 <div className="space-y-4">
                   <AnimatePresence mode="popLayout">
-                    {displayMessages.map((message, index) => (
+                    {displayMessages.map((message) => (
                       <motion.div
                         key={message.id}
+                        data-message-id={message.id}
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.15, ease: "easeOut" }}
@@ -402,14 +411,17 @@ export default function VoiceChatContainer() {
                                 : "flex justify-start"
                             }`}
                           >
-                            <motion.div
-                              whileHover={{ scale: 1.02 }}
+                            <div
                               onClick={() => {
                                 if (message.mediaType !== "video") {
                                   setPreviewImage(message.mediaUrl!);
                                 }
                               }}
-                              className="max-w-xs rounded-xl overflow-hidden shadow-md border border-[#E5E7EB] cursor-pointer"
+                              className={`max-w-xs rounded-xl overflow-hidden shadow-md border border-[#E5E7EB] ${
+                                message.mediaType !== "video"
+                                  ? "cursor-pointer"
+                                  : ""
+                              }`}
                             >
                               {message.mediaType === "video" ? (
                                 <video
@@ -424,7 +436,7 @@ export default function VoiceChatContainer() {
                                   className="w-full"
                                 />
                               )}
-                            </motion.div>
+                            </div>
                           </div>
                         )}
                         {/* Text message bubble */}
@@ -438,12 +450,7 @@ export default function VoiceChatContainer() {
                               message.isUser ? "items-end" : "items-start"
                             }`}
                           >
-                            <motion.div
-                              whileHover={{
-                                scale: 1.02,
-                                boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
-                              }}
-                              transition={{ duration: 0.2 }}
+                            <div
                               className={`rounded-2xl px-5 py-3 shadow-sm ${
                                 message.isUser
                                   ? "bg-linear-to-br from-[#3B82F6] to-[#60A5FA] text-white"
@@ -453,7 +460,7 @@ export default function VoiceChatContainer() {
                               <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap wrap-break-word">
                                 {message.text}
                               </p>
-                            </motion.div>
+                            </div>
                             {message.timestamp && (
                               <span className="text-xs text-[#64748B] mt-1 px-2">
                                 {message.timestamp}
