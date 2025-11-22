@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import MicButton from "./MicButton";
 import MediaPreview from "./MediaPreview";
+import useSpeechRecognition from "@/hooks/useSpeechRecognition";
 
 interface SpeechInputControlsProps {
   isVoiceMode: boolean;
@@ -26,8 +27,18 @@ export default function SpeechInputControls({
 }: SpeechInputControlsProps) {
   const [textInput, setTextInput] = useState("");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [isDictating, setIsDictating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Separate speech recognition hook for dictation in text mode
+  const {
+    transcript: dictationTranscript,
+    isListening: isDictationListening,
+    startListening: startDictation,
+    stopListening: stopDictation,
+    resetTranscript: resetDictation,
+  } = useSpeechRecognition();
 
   // Auto-resize textarea
   useEffect(() => {
@@ -36,6 +47,24 @@ export default function SpeechInputControls({
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, [textInput]);
+
+  // Update text input with dictation transcript
+  useEffect(() => {
+    if (isDictating && dictationTranscript) {
+      setTextInput(dictationTranscript);
+    }
+  }, [dictationTranscript, isDictating]);
+
+  // Handle dictation toggle
+  const handleDictationToggle = () => {
+    if (isDictating) {
+      stopDictation();
+      setIsDictating(false);
+    } else {
+      startDictation();
+      setIsDictating(true);
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -67,6 +96,12 @@ export default function SpeechInputControls({
       }
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
+      }
+      // Stop dictation if active
+      if (isDictating) {
+        stopDictation();
+        setIsDictating(false);
+        resetDictation();
       }
     }
   };
@@ -209,12 +244,61 @@ export default function SpeechInputControls({
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={disabled}
-              placeholder="Type your message..."
+              disabled={disabled || isDictating}
+              placeholder={
+                isDictating ? "Listening..." : "Type your message..."
+              }
               rows={1}
-              className="flex-1 resize-none bg-transparent text-[#1E3A8A] placeholder:text-[#94A3B8] focus:outline-none text-sm md:text-base max-h-32 overflow-y-auto"
+              className={`flex-1 resize-none bg-transparent text-[#1E3A8A] placeholder:text-[#94A3B8] focus:outline-none text-sm md:text-base max-h-32 overflow-y-auto ${
+                isDictating ? "opacity-50 cursor-not-allowed" : ""
+              }`}
               style={{ minHeight: "24px" }}
             />
+
+            {/* Dictation Button */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleDictationToggle}
+              disabled={disabled}
+              className={`shrink-0 p-3 rounded-xl transition-all relative ${
+                isDictating
+                  ? "bg-[#EF4444] text-white shadow-md"
+                  : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0]"
+              } ${
+                disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+              }`}
+              aria-label={isDictating ? "Stop dictation" : "Start dictation"}
+            >
+              {/* Pulsing ring when dictating */}
+              {isDictating && (
+                <motion.div
+                  animate={{
+                    scale: [1, 1.5, 1],
+                    opacity: [0.6, 0, 0.6],
+                  }}
+                  transition={{
+                    duration: 1.5,
+                    repeat: Infinity,
+                    ease: "easeOut",
+                  }}
+                  className="absolute inset-0 rounded-xl bg-[#EF4444]"
+                />
+              )}
+              <svg
+                className="w-5 h-5 relative z-10"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                />
+              </svg>
+            </motion.button>
 
             {/* Send Button */}
             <motion.button

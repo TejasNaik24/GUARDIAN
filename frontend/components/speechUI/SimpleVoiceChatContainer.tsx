@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import useVoiceChat from "@/hooks/useVoiceChat";
 import MicrophoneButton from "./MicrophoneButton";
 import VoiceMessageBubble from "./VoiceMessageBubble";
@@ -47,7 +47,12 @@ export default function SimpleVoiceChatContainer() {
   return (
     <div className="flex flex-col h-screen bg-[#F9FAFB]">
       {/* Header */}
-      <header className="bg-white border-b border-[#E5E7EB] px-4 md:px-6 py-4 shadow-sm">
+      <motion.header
+        initial={{ y: -50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="bg-white border-b border-[#E5E7EB] px-4 md:px-6 py-4 shadow-sm"
+      >
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] rounded-xl flex items-center justify-center shadow-md">
@@ -73,10 +78,15 @@ export default function SimpleVoiceChatContainer() {
             </div>
           </div>
         </div>
-      </header>
+      </motion.header>
 
       {/* Chat Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
+        className="flex-1 overflow-y-auto px-4 md:px-6 py-6 pb-24 md:pb-6"
+      >
         <div className="max-w-4xl mx-auto">
           {messages.length === 0 ? (
             /* Empty State */
@@ -141,16 +151,37 @@ export default function SimpleVoiceChatContainer() {
 
           {/* Current Transcript Display */}
           {currentTranscript && isListening && (
-            <div className="mt-4 p-4 bg-[#EFF6FF] border border-[#3B82F6]/20 rounded-xl">
-              <p className="text-xs text-[#64748B] mb-1">You're saying:</p>
-              <p className="text-sm text-[#1E3A8A]">{currentTranscript}</p>
-            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              className="mt-4 p-4 bg-[#EFF6FF] border border-[#3B82F6]/20 rounded-xl shadow-sm"
+            >
+              <p className="text-xs text-[#64748B] mb-1 flex items-center gap-1">
+                <motion.span
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                >
+                  🎤
+                </motion.span>
+                You're saying:
+              </p>
+              <p className="text-sm text-[#1E3A8A] font-medium">
+                {currentTranscript}
+              </p>
+            </motion.div>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* Voice Input Control */}
-      <div className="border-t border-[#E5E7EB] px-4 md:px-6 py-8 bg-white">
+      <motion.div
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+        className="border-t border-[#E5E7EB] px-4 md:px-6 py-8 bg-white fixed bottom-0 left-0 right-0 md:relative"
+      >
         <div className="max-w-4xl mx-auto flex justify-center">
           <MicrophoneButton
             isListening={isListening}
@@ -159,7 +190,7 @@ export default function SimpleVoiceChatContainer() {
             size="lg"
           />
         </div>
-      </div>
+      </motion.div>
 
       {/* Medical Disclaimer */}
       <div className="bg-[#FEF3C7] border-t border-[#FCD34D] px-4 py-2">

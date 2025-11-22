@@ -35,19 +35,31 @@ export default function VoiceMessageBubble({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
+      initial={{
+        opacity: 0,
+        y: isUser ? 30 : -30,
+        x: isUser ? 50 : -50,
+        scale: 0.9,
+      }}
+      animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
+      transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
       className={`flex w-full ${isUser ? "justify-end" : "justify-start"} mb-4`}
     >
       <div
-        className={`flex flex-col max-w-[80%] ${
+        className={`flex flex-col max-w-[80%] md:max-w-[70%] ${
           isUser ? "items-end" : "items-start"
         }`}
       >
         {/* Speech Bubble */}
-        <div
-          className={`rounded-2xl px-5 py-3 shadow-sm ${
+        <motion.div
+          whileHover={{
+            scale: 1.02,
+            boxShadow: isUser
+              ? "0 10px 30px rgba(59, 130, 246, 0.3)"
+              : "0 10px 30px rgba(0, 0, 0, 0.1)",
+          }}
+          transition={{ duration: 0.2 }}
+          className={`rounded-2xl px-5 py-3 shadow-sm cursor-default ${
             isUser
               ? "bg-linear-to-br from-[#3B82F6] to-[#60A5FA] text-white"
               : `bg-white text-[#1E3A8A] border border-[#E5E7EB] ${getUrgencyColor()}`
@@ -76,7 +88,7 @@ export default function VoiceMessageBubble({
             </div>
           )}
 
-          <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap">
+          <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap wrap-break-word">
             {message}
           </p>
 
@@ -96,7 +108,7 @@ export default function VoiceMessageBubble({
               </span>
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Timestamp */}
         {timestamp && (

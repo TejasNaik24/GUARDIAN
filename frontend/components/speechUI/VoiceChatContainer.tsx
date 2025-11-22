@@ -157,7 +157,7 @@ export default function VoiceChatContainer() {
     <div className="flex flex-col h-screen bg-[#F9FAFB]">
       {/* Header */}
       <header className="bg-white border-b border-[#E5E7EB] px-4 md:px-6 py-4 shadow-sm">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <div className="w-full flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] rounded-xl flex items-center justify-center shadow-md">
               <svg
@@ -176,7 +176,6 @@ export default function VoiceChatContainer() {
             </div>
             <div>
               <h1 className="text-lg font-semibold text-[#1E3A8A]">Guardian</h1>
-              <p className="text-xs text-[#64748B]">Voice Assistant</p>
             </div>
           </div>
 
@@ -248,7 +247,12 @@ export default function VoiceChatContainer() {
       </header>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
+      <motion.div
+        initial={{ y: -50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
+        className="flex-1 overflow-y-auto px-4 md:px-6 py-6 pb-24 md:pb-6"
+      >
         <div className="max-w-4xl mx-auto">
           {isVoiceMode ? (
             <>
@@ -353,75 +357,111 @@ export default function VoiceChatContainer() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {messages.map((message) => (
-                    <div key={message.id}>
-                      {/* Media attachment - show first */}
-                      {message.mediaUrl && (
+                  <AnimatePresence mode="popLayout">
+                    {messages.map((message, index) => (
+                      <motion.div
+                        key={message.id}
+                        initial={{
+                          opacity: 0,
+                          x: message.isUser ? 50 : -50,
+                          y: 20,
+                        }}
+                        animate={{ opacity: 1, x: 0, y: 0 }}
+                        transition={{
+                          duration: 0.4,
+                          delay: index * 0.1,
+                          ease: "easeOut",
+                        }}
+                      >
+                        {/* Media attachment - show first */}
+                        {message.mediaUrl && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            transition={{ duration: 0.5, ease: "easeOut" }}
+                            className={`mb-3 ${
+                              message.isUser
+                                ? "flex justify-end"
+                                : "flex justify-start"
+                            }`}
+                          >
+                            <motion.div
+                              whileHover={{ scale: 1.02 }}
+                              className="max-w-xs rounded-xl overflow-hidden shadow-md border border-[#E5E7EB] cursor-pointer"
+                            >
+                              {message.mediaType === "video" ? (
+                                <video
+                                  src={message.mediaUrl}
+                                  controls
+                                  className="w-full"
+                                />
+                              ) : (
+                                <img
+                                  src={message.mediaUrl}
+                                  alt="Shared media"
+                                  className="w-full"
+                                />
+                              )}
+                            </motion.div>
+                          </motion.div>
+                        )}
+                        {/* Text message bubble */}
                         <div
-                          className={`mb-3 ${
-                            message.isUser
-                              ? "flex justify-end"
-                              : "flex justify-start"
-                          }`}
+                          className={`flex w-full ${
+                            message.isUser ? "justify-end" : "justify-start"
+                          } mb-4`}
                         >
-                          <div className="max-w-xs rounded-xl overflow-hidden shadow-md border border-[#E5E7EB]">
-                            {message.mediaType === "video" ? (
-                              <video
-                                src={message.mediaUrl}
-                                controls
-                                className="w-full"
-                              />
-                            ) : (
-                              <img
-                                src={message.mediaUrl}
-                                alt="Shared media"
-                                className="w-full"
-                              />
+                          <div
+                            className={`flex flex-col max-w-[80%] md:max-w-[70%] ${
+                              message.isUser ? "items-end" : "items-start"
+                            }`}
+                          >
+                            <motion.div
+                              whileHover={{
+                                scale: 1.02,
+                                boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
+                              }}
+                              transition={{ duration: 0.2 }}
+                              className={`rounded-2xl px-5 py-3 shadow-sm ${
+                                message.isUser
+                                  ? "bg-linear-to-br from-[#3B82F6] to-[#60A5FA] text-white"
+                                  : "bg-white text-[#1E3A8A] border border-[#E5E7EB]"
+                              }`}
+                            >
+                              <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap wrap-break-word">
+                                {message.text}
+                              </p>
+                            </motion.div>
+                            {message.timestamp && (
+                              <motion.span
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.3 }}
+                                className="text-xs text-[#64748B] mt-1 px-2"
+                              >
+                                {message.timestamp}
+                              </motion.span>
                             )}
                           </div>
                         </div>
-                      )}
-                      {/* Text message bubble */}
-                      <div
-                        className={`flex w-full ${
-                          message.isUser ? "justify-end" : "justify-start"
-                        } mb-4`}
-                      >
-                        <div
-                          className={`flex flex-col max-w-[80%] ${
-                            message.isUser ? "items-end" : "items-start"
-                          }`}
-                        >
-                          <div
-                            className={`rounded-2xl px-5 py-3 shadow-sm ${
-                              message.isUser
-                                ? "bg-linear-to-br from-[#3B82F6] to-[#60A5FA] text-white"
-                                : "bg-white text-[#1E3A8A] border border-[#E5E7EB]"
-                            }`}
-                          >
-                            <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap">
-                              {message.text}
-                            </p>
-                          </div>
-                          {message.timestamp && (
-                            <span className="text-xs text-[#64748B] mt-1 px-2">
-                              {message.timestamp}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
                   <div ref={messagesEndRef} />
                 </div>
               )}
             </>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* Bottom Control Bar */}
-      <div className="border-t border-[#E5E7EB] px-4 md:px-6 py-4 bg-white">
+      <motion.div
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+        className="px-4 md:px-6 py-6 pb-6 fixed bottom-0 left-0 right-0 md:relative"
+      >
         <div className="max-w-4xl mx-auto">
           {isVoiceMode ? (
             /* Voice Mode Controls */
@@ -505,7 +545,7 @@ export default function VoiceChatContainer() {
             />
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* Disclaimer */}
       <AnimatePresence>

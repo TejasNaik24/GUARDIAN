@@ -29,41 +29,87 @@ export default function MicrophoneButton({
 
   return (
     <div className="relative flex items-center justify-center">
-      {/* Pulsing rings when listening */}
+      {/* Pulsing rings when listening - Enhanced */}
       {isListening && (
         <>
           <motion.div
             animate={{
-              scale: [1, 1.5, 2],
-              opacity: [0.6, 0.3, 0],
+              scale: [1, 1.8, 2.5],
+              opacity: [0.7, 0.4, 0],
             }}
             transition={{
-              duration: 1.5,
+              duration: 1.2,
               repeat: Infinity,
               ease: "easeOut",
+            }}
+            className={`absolute ${sizeClasses[size]} rounded-full bg-[#3B82F6] blur-sm`}
+          />
+          <motion.div
+            animate={{
+              scale: [1, 1.5, 2],
+              opacity: [0.8, 0.5, 0],
+            }}
+            transition={{
+              duration: 1.2,
+              repeat: Infinity,
+              ease: "easeOut",
+              delay: 0.2,
             }}
             className={`absolute ${sizeClasses[size]} rounded-full bg-[#3B82F6]`}
           />
           <motion.div
             animate={{
               scale: [1, 1.3, 1.6],
-              opacity: [0.7, 0.4, 0],
+              opacity: [0.9, 0.6, 0],
             }}
             transition={{
-              duration: 1.5,
+              duration: 1.2,
               repeat: Infinity,
               ease: "easeOut",
-              delay: 0.3,
+              delay: 0.4,
             }}
-            className={`absolute ${sizeClasses[size]} rounded-full bg-[#3B82F6]`}
+            className={`absolute ${sizeClasses[size]} rounded-full bg-[#60A5FA]`}
+          />
+          {/* Glow effect */}
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.5, 0.8, 0.5],
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+            className={`absolute ${sizeClasses[size]} rounded-full bg-[#3B82F6] blur-xl`}
           />
         </>
       )}
 
       {/* Main Microphone Button */}
       <motion.button
-        whileHover={!disabled ? { scale: 1.05 } : {}}
-        whileTap={!disabled ? { scale: 0.95 } : {}}
+        animate={
+          !isListening && !disabled
+            ? {
+                boxShadow: [
+                  "0 10px 30px rgba(59, 130, 246, 0.3)",
+                  "0 10px 40px rgba(59, 130, 246, 0.5)",
+                  "0 10px 30px rgba(59, 130, 246, 0.3)",
+                ],
+              }
+            : {}
+        }
+        transition={{
+          duration: 2,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        whileHover={
+          !disabled
+            ? { scale: 1.08, boxShadow: "0 15px 50px rgba(59, 130, 246, 0.6)" }
+            : {}
+        }
+        whileTap={!disabled ? { scale: 0.92 } : {}}
         onClick={onToggle}
         disabled={disabled}
         className={`relative z-10 ${
