@@ -116,7 +116,7 @@ export default function SpeechInputControls({
   return (
     <div className="w-full">
       {/* Input Area */}
-      <div className="bg-white rounded-2xl shadow-lg border border-[#E5E7EB] p-4">
+      <div className="bg-white rounded-2xl shadow-lg border border-[#E5E7EB] px-3 py-3">
         {/* Media Preview */}
         {uploadedFile && (
           <div className="mb-3">
@@ -207,7 +207,7 @@ export default function SpeechInputControls({
           </div>
         ) : (
           /* Text Mode - Input Box */
-          <div className="flex items-end gap-3">
+          <div className="flex items-center gap-2">
             {/* Upload Button */}
             <input
               ref={fileInputRef}
@@ -220,11 +220,11 @@ export default function SpeechInputControls({
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => fileInputRef.current?.click()}
-              className="shrink-0 p-3 rounded-xl bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] transition-colors cursor-pointer"
+              className="shrink-0 p-2 rounded-lg bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] transition-colors cursor-pointer"
               aria-label="Upload media"
             >
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -261,7 +261,7 @@ export default function SpeechInputControls({
               whileTap={{ scale: 0.95 }}
               onClick={handleDictationToggle}
               disabled={disabled}
-              className={`shrink-0 p-3 rounded-xl transition-all relative ${
+              className={`shrink-0 p-2 rounded-lg transition-all relative ${
                 isDictating
                   ? "bg-[#EF4444] text-white shadow-md"
                   : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0]"
@@ -282,11 +282,11 @@ export default function SpeechInputControls({
                     repeat: Infinity,
                     ease: "easeOut",
                   }}
-                  className="absolute inset-0 rounded-xl bg-[#EF4444]"
+                  className="absolute inset-0 rounded-lg bg-[#EF4444]"
                 />
               )}
               <svg
-                className="w-5 h-5 relative z-10"
+                className="w-4 h-4 relative z-10"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -308,14 +308,14 @@ export default function SpeechInputControls({
               whileTap={{ scale: textInput.trim() || uploadedFile ? 0.95 : 1 }}
               onClick={handleSend}
               disabled={disabled || (!textInput.trim() && !uploadedFile)}
-              className={`shrink-0 p-3 rounded-xl transition-all ${
+              className={`shrink-0 p-2 rounded-lg transition-all ${
                 (textInput.trim() || uploadedFile) && !disabled
                   ? "bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] text-white shadow-md hover:shadow-lg cursor-pointer"
                   : "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
               }`}
             >
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
