@@ -260,71 +260,6 @@ export default function VoiceChatContainer() {
               <div className="flex items-center justify-center min-h-[60vh]">
                 <GuardianAvatar state={conversationState} />
               </div>
-
-              {/* Transcript Toggle Button */}
-              <div className="flex justify-center mt-8 mb-4">
-                <button
-                  onClick={() => setShowTranscript(!showTranscript)}
-                  className="px-4 py-2 rounded-full bg-white border border-[#E5E7EB] text-[#1E3A8A] text-sm font-medium hover:bg-[#F9FAFB] transition-colors cursor-pointer shadow-sm"
-                >
-                  {showTranscript ? "Hide" : "Show"} Transcript
-                </button>
-              </div>
-
-              {/* Transcript Area */}
-              {showTranscript && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-4 max-h-64 overflow-y-auto"
-                >
-                  {messages.length === 0 ? (
-                    <p className="text-sm text-[#94A3B8] text-center py-8">
-                      No conversation yet. Start speaking!
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {messages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`flex ${
-                            message.isUser ? "justify-end" : "justify-start"
-                          }`}
-                        >
-                          <div
-                            className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                              message.isUser
-                                ? "bg-linear-to-br from-[#3B82F6] to-[#60A5FA] text-white"
-                                : "bg-[#F9FAFB] text-[#1E3A8A] border border-[#E5E7EB]"
-                            }`}
-                          >
-                            <p className="text-sm">{message.text}</p>
-                            {message.mediaUrl && (
-                              <div className="mt-2 rounded-lg overflow-hidden">
-                                {message.mediaType === "video" ? (
-                                  <video
-                                    src={message.mediaUrl}
-                                    controls
-                                    className="w-full max-w-xs"
-                                  />
-                                ) : (
-                                  <img
-                                    src={message.mediaUrl}
-                                    alt="Shared media"
-                                    className="w-full max-w-xs"
-                                  />
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      <div ref={messagesEndRef} />
-                    </div>
-                  )}
-                </motion.div>
-              )}
             </>
           ) : (
             /* Text Mode - Full Chat View */
@@ -471,35 +406,50 @@ export default function VoiceChatContainer() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleToggleMic}
-                className={`p-4 rounded-full transition-all cursor-pointer shadow-md ${
+                className={`p-5 rounded-full transition-all cursor-pointer shadow-md ${
                   isMuted
                     ? "bg-[#EF4444] text-white"
                     : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0]"
                 }`}
                 aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
               >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  {isMuted ? (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                    />
-                  ) : (
+                {isMuted ? (
+                  <svg
+                    className="w-7 h-7"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    {/* Microphone with slash (muted) */}
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
                       d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
                     />
-                  )}
-                </svg>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 3l18 18"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-7 h-7"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    {/* Normal microphone */}
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                    />
+                  </svg>
+                )}
               </motion.button>
 
               {/* Upload Media Button */}
@@ -514,11 +464,11 @@ export default function VoiceChatContainer() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => fileInputRef.current?.click()}
-                className="p-4 rounded-full bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] transition-colors cursor-pointer shadow-md"
+                className="p-5 rounded-full bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] transition-colors cursor-pointer shadow-md"
                 aria-label="Upload media"
               >
                 <svg
-                  className="w-6 h-6"
+                  className="w-7 h-7"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
