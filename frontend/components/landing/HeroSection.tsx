@@ -158,7 +158,7 @@ export default function HeroSection({ scrollToSection }: HeroSectionProps) {
         >
           <Link
             href="/chat"
-            className="group relative overflow-hidden rounded-full bg-[#2563EB] px-10 py-4 text-lg font-semibold text-white shadow-lg shadow-[#2563EB]/50 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#1D4ED8]/60"
+            className="group relative overflow-hidden rounded-full bg-[#2563EB] px-10 py-4 text-lg font-semibold text-white shadow-lg shadow-[#2563EB]/50 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#1D4ED8]/60 cursor-pointer"
           >
             <span className="relative z-10 flex items-center gap-2">
               Start Chatting
@@ -181,7 +181,7 @@ export default function HeroSection({ scrollToSection }: HeroSectionProps) {
 
           <button
             onClick={() => scrollToSection("how-it-works")}
-            className="group relative overflow-hidden rounded-full border-2 border-[#60A5FA]/50 bg-[#1E40AF]/10 px-10 py-4 text-lg font-semibold text-[#60A5FA] backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-[#60A5FA] hover:bg-[#1E40AF]/20 hover:text-[#93C5FD] hover:shadow-lg hover:shadow-[#60A5FA]/30"
+            className="group relative overflow-hidden rounded-full border-2 border-[#60A5FA]/50 bg-[#1E40AF]/10 px-10 py-4 text-lg font-semibold text-[#60A5FA] backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-[#60A5FA] hover:bg-[#1E40AF]/20 hover:text-[#93C5FD] hover:shadow-lg hover:shadow-[#60A5FA]/30 cursor-pointer"
           >
             <span className="flex items-center gap-2">
               How It Works
