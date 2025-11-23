@@ -8,6 +8,8 @@ import SpeechInputControls from "./SpeechInputControls";
 import useSpeechRecognition from "@/hooks/useSpeechRecognition";
 import useSpeechSynthesis from "@/hooks/useSpeechSynthesis";
 import useChat from "@/hooks/useChat";
+import { useAuth } from "@/contexts/AuthContext";
+import AuthModal from "../auth/AuthModal";
 
 interface Message {
   id: string;
@@ -21,6 +23,7 @@ interface Message {
 type ConversationState = "idle" | "listening" | "thinking" | "speaking";
 
 export default function VoiceChatContainer() {
+  const { isGuest } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isVoiceMode, setIsVoiceMode] = useState(true);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -30,6 +33,8 @@ export default function VoiceChatContainer() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const lastMessageRef = useRef<HTMLDivElement>(null);
@@ -300,72 +305,117 @@ export default function VoiceChatContainer() {
             </div>
           </div>
 
-          {/* Mode Toggle */}
-          <div className="bg-white rounded-full px-2 py-2 shadow-md border border-[#E5E7EB] inline-flex items-center gap-2">
-            <button
-              onClick={() => isVoiceMode && handleToggleMode()}
-              className={`relative px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                !isVoiceMode ? "text-white" : "text-[#64748B]"
-              }`}
-            >
-              {!isVoiceMode && (
-                <motion.div
-                  layoutId="modeToggle"
-                  className="absolute inset-0 bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] rounded-full"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                />
-              )}
-              <span className="relative z-10 flex items-center gap-1.5">
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+          {/* Mode Toggle and Auth Buttons */}
+          <div className="flex items-center gap-3">
+            {/* Login/Signup Buttons - only show for guests */}
+            {isGuest && (
+              <div className="bg-white rounded-full px-2 py-2 shadow-md border border-[#E5E7EB] inline-flex items-center gap-2">
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="px-3 py-1.5 text-xs font-medium text-[#64748B] hover:text-[#1E3A8A] rounded-full transition-colors cursor-pointer"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                  />
-                </svg>
-                Text
-              </span>
-            </button>
+                  Log in
+                </button>
+                <button
+                  onClick={() => {
+                    setAuthMode("signup");
+                    setShowAuthModal(true);
+                  }}
+                  className="relative px-3 py-1.5 rounded-full text-xs font-medium text-white transition-all cursor-pointer"
+                >
+                  <div className="absolute inset-0 bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] rounded-full" />
+                  <span className="relative z-10">Sign up</span>
+                </button>
+              </div>
+            )}
 
-            <button
-              onClick={() => !isVoiceMode && handleToggleMode()}
-              className={`relative px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                isVoiceMode ? "text-white" : "text-[#64748B]"
-              }`}
-            >
-              {isVoiceMode && (
-                <motion.div
-                  layoutId="modeToggle"
-                  className="absolute inset-0 bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] rounded-full"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                />
-              )}
-              <span className="relative z-10 flex items-center gap-1.5">
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+            {/* Mode Toggle */}
+            <div className="bg-white rounded-full px-2 py-2 shadow-md border border-[#E5E7EB] inline-flex items-center gap-2">
+              <button
+                onClick={() => isVoiceMode && handleToggleMode()}
+                className={`relative px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                  !isVoiceMode ? "text-white" : "text-[#64748B]"
+                }`}
+              >
+                {!isVoiceMode && (
+                  <motion.div
+                    layoutId="modeToggle"
+                    className="absolute inset-0 bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] rounded-full"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                   />
-                </svg>
-                Voice
-              </span>
-            </button>
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                  Text
+                </span>
+              </button>
+
+              <button
+                onClick={() => !isVoiceMode && handleToggleMode()}
+                className={`relative px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                  isVoiceMode ? "text-white" : "text-[#64748B]"
+                }`}
+              >
+                {isVoiceMode && (
+                  <motion.div
+                    layoutId="modeToggle"
+                    className="absolute inset-0 bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] rounded-full"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                    />
+                  </svg>
+                  Voice
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
+
+      {/* Auth Modal */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-100 bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <AuthModal
+              isOpen={true}
+              onClose={() => setShowAuthModal(false)}
+              mode={authMode}
+              onSwitchMode={setAuthMode}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content Area */}
       <motion.div

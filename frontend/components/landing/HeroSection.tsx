@@ -1,13 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { motion, useScroll, useTransform } from "framer-motion";
 
 interface HeroSectionProps {
   scrollToSection: (id: string) => void;
+  onStartChat: () => void;
 }
 
-export default function HeroSection({ scrollToSection }: HeroSectionProps) {
+export default function HeroSection({
+  scrollToSection,
+  onStartChat,
+}: HeroSectionProps) {
   const { scrollY } = useScroll();
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
   const scale = useTransform(scrollY, [0, 300], [1, 0.8]);
@@ -156,8 +159,8 @@ export default function HeroSection({ scrollToSection }: HeroSectionProps) {
           transition={{ duration: 0.8, delay: 0.6 }}
           className="flex flex-col gap-6 sm:flex-row sm:gap-8"
         >
-          <Link
-            href="/chat"
+          <button
+            onClick={onStartChat}
             className="group relative overflow-hidden rounded-full bg-[#2563EB] px-10 py-4 text-lg font-semibold text-white shadow-lg shadow-[#2563EB]/50 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#1D4ED8]/60 cursor-pointer"
           >
             <span className="relative z-10 flex items-center gap-2">
@@ -177,7 +180,7 @@ export default function HeroSection({ scrollToSection }: HeroSectionProps) {
               </svg>
             </span>
             <div className="absolute inset-0 z-0 bg-[#1D4ED8] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-          </Link>
+          </button>
 
           <button
             onClick={() => scrollToSection("how-it-works")}
