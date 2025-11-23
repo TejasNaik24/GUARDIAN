@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   // Check for session cookie
   const supabaseToken = req.cookies.get("sb-access-token");
   const hasSession = !!supabaseToken;
