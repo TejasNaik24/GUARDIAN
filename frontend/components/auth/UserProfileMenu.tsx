@@ -34,7 +34,15 @@ export default function UserProfileMenu() {
 
   const getDisplayName = () => {
     if (isGuest) return "Guest User";
-    return user?.email || "User";
+    // Show just initials instead of full email
+    const email = user?.email || "";
+    if (!email) return "User";
+
+    // Get first letter of email and first letter after @ (if exists)
+    const parts = email.split("@");
+    const firstLetter = parts[0].charAt(0).toUpperCase();
+
+    return firstLetter;
   };
 
   const getInitials = () => {
@@ -78,32 +86,10 @@ export default function UserProfileMenu() {
       {/* Profile Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-3 px-3 py-2 bg-white hover:bg-gray-50 rounded-xl shadow-lg transition-colors border border-gray-200 cursor-pointer"
+        className="p-2 bg-white hover:bg-gray-50 rounded-xl shadow-lg transition-colors border border-gray-200 cursor-pointer"
       >
         {/* Avatar */}
         {renderAvatar()}
-
-        {/* Name - hidden on mobile */}
-        <span className="hidden sm:block text-sm font-medium text-gray-700">
-          {getDisplayName()}
-        </span>
-
-        {/* Chevron */}
-        <svg
-          className={`w-4 h-4 text-gray-500 transition-transform ${
-            isOpen ? "rotate-180" : ""
-          }`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M5 15l7-7 7 7"
-          />
-        </svg>
       </button>
 
       {/* Dropdown Menu */}
@@ -111,14 +97,11 @@ export default function UserProfileMenu() {
         <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
           {/* User Info */}
           <div className="px-4 py-3 border-b border-gray-100">
-            <p className="text-sm font-semibold text-gray-900">
-              {getDisplayName()}
-            </p>
             {!isGuest && user?.email && (
-              <p className="text-xs text-gray-500 mt-1">{user.email}</p>
+              <p className="text-xs text-gray-500">{user.email}</p>
             )}
             {isGuest && (
-              <p className="text-xs text-yellow-600 mt-1">
+              <p className="text-xs text-yellow-600">
                 Your chats won&apos;t be saved
               </p>
             )}

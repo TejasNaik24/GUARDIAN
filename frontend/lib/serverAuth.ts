@@ -7,7 +7,7 @@ import { cookies } from "next/headers";
  */
 export async function getServerSession() {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const accessToken = cookieStore.get("sb-access-token");
     const refreshToken = cookieStore.get("sb-refresh-token");
 

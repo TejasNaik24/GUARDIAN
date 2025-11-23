@@ -3,23 +3,23 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { useAuth } from "@/contexts/AuthContext";
+import { useRequireAuth } from "@/lib/requireUser";
 import { motion } from "framer-motion";
 
 interface UserProfile {
   email: string;
   full_name: string;
-  username: string;
+  bio: string;
   avatar_url: string;
 }
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useRequireAuth();
   const [profile, setProfile] = useState<UserProfile>({
     email: "",
     full_name: "",
-    username: "",
+    bio: "",
     avatar_url: "",
   });
   const [loading, setLoading] = useState(true);
@@ -28,15 +28,10 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/chat");
-      return;
-    }
-
-    if (user) {
+    if (!authLoading && user) {
       loadProfile();
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading]);
 
   const loadProfile = async () => {
     try {
@@ -52,24 +47,14 @@ export default function ProfilePage() {
       if (userError) throw userError;
 
       if (currentUser) {
-        // Load from user metadata and database profile
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", currentUser.id)
-          .single();
-
         setProfile({
           email: currentUser.email || "",
           full_name:
-            profileData?.full_name ||
             currentUser.user_metadata?.full_name ||
             currentUser.user_metadata?.name ||
             "",
-          username:
-            profileData?.username || currentUser.user_metadata?.username || "",
+          bio: currentUser.user_metadata?.bio || "",
           avatar_url:
-            profileData?.avatar_url ||
             currentUser.user_metadata?.avatar_url ||
             currentUser.user_metadata?.picture ||
             "",
@@ -94,36 +79,18 @@ export default function ProfilePage() {
       const { error: updateError } = await supabase.auth.updateUser({
         data: {
           full_name: profile.full_name,
-          username: profile.username,
+          bio: profile.bio,
           avatar_url: profile.avatar_url,
         },
       });
 
       if (updateError) throw updateError;
 
-      // Also update the profiles table
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
-
-      if (currentUser) {
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .update({
-            full_name: profile.full_name,
-            username: profile.username,
-            avatar_url: profile.avatar_url,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", currentUser.id);
-
-        if (profileError) {
-          console.error("Profile table update error:", profileError);
-          // Don't throw - metadata update was successful
-        }
-      }
-
       setSuccess("Profile updated successfully!");
+
+      // Refresh the profile data to show updated values
+      await loadProfile();
+
       setTimeout(() => setSuccess(""), 3000);
     } catch (err: any) {
       console.error("Error updating profile:", err);
@@ -296,20 +263,20 @@ export default function ProfilePage() {
               />
             </div>
 
-            {/* Username */}
+            {/* Bio */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Username
+                Bio
               </label>
-              <input
-                type="text"
-                value={profile.username}
-                onChange={(e) => handleChange("username", e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent text-black"
-                placeholder="johndoe"
+              <textarea
+                value={profile.bio}
+                onChange={(e) => handleChange("bio", e.target.value)}
+                rows={4}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent text-black resize-none"
+                placeholder="Tell us about yourself..."
               />
               <p className="mt-1 text-xs text-gray-500">
-                Choose a unique username
+                A brief description about you
               </p>
             </div>
 
