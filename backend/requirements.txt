@@ -16,7 +16,6 @@ sentence-transformers==3.0.1
 supabase==2.4.3
 
 # Image / Video / PDF
-pillow==10.3.0
 opencv-python==4.9.0.80
 numpy==1.26.4
 pypdf==4.2.0
