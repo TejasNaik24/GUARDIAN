@@ -1,9 +1,0 @@
--- SQL schema for tables (if needed)
--- Example:
--- CREATE TABLE triage_requests (
---     id SERIAL PRIMARY KEY,
---     text TEXT,
---     image_url TEXT,
---     video_url TEXT,
---     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
--- );

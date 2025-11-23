@@ -44,8 +44,8 @@ export function ConversationListItem({
         relative p-2.5 rounded-lg cursor-pointer transition-all
         ${
           isActive
-            ? "bg-gray-700 border-l-2 border-blue-500"
-            : "bg-transparent hover:bg-gray-800 border-l-2 border-transparent"
+            ? "bg-blue-50 border-l-2 border-blue-500"
+            : "bg-transparent hover:bg-gray-100 border-l-2 border-transparent"
         }
       `}
     >
@@ -53,7 +53,7 @@ export function ConversationListItem({
         <div className="flex-1 min-w-0">
           <h3
             className={`font-medium text-sm truncate ${
-              isActive ? "text-gray-100" : "text-gray-300"
+              isActive ? "text-blue-900" : "text-gray-700"
             }`}
           >
             {conversation.title}
@@ -63,7 +63,7 @@ export function ConversationListItem({
               {conversation.lastMessage}
             </p>
           )}
-          <p className="text-xs text-gray-600 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             {new Date(conversation.updated_at).toLocaleDateString()}
           </p>
         </div>
@@ -75,7 +75,7 @@ export function ConversationListItem({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               onClick={handleDelete}
-              className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-900/20"
+              className="text-red-500 hover:text-red-600 p-1 rounded hover:bg-red-50"
             >
               <svg
                 className="w-4 h-4"

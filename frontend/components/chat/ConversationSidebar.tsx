@@ -50,7 +50,7 @@ export function ConversationSidebar({
             animate={{ x: 0 }}
             exit={{ x: -256 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed left-16 top-0 h-full w-64 bg-[#202020] shadow-2xl z-40 flex flex-col"
+            className="fixed left-60 top-0 h-full w-64 bg-[#202020] shadow-2xl z-40 flex flex-col"
           >
             {/* Header */}
             <div className="p-4 border-b border-gray-700">

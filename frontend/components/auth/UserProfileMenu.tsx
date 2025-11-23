@@ -4,7 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function UserProfileMenu() {
+interface UserProfileMenuProps {
+  isExpanded?: boolean;
+}
+
+export default function UserProfileMenu({
+  isExpanded = false,
+}: UserProfileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { user, isGuest, signOut } = useAuth();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -82,14 +88,32 @@ export default function UserProfileMenu() {
   };
 
   return (
-    <div ref={menuRef} className="fixed bottom-4 left-4 z-50">
+    <div
+      ref={menuRef}
+      className={isExpanded ? "w-full" : "fixed bottom-4 left-4 z-50"}
+    >
       {/* Profile Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 bg-white hover:bg-gray-50 rounded-xl shadow-lg transition-colors border border-gray-200 cursor-pointer"
+        className={`bg-white hover:bg-gray-50 rounded-xl shadow-lg transition-colors border border-gray-200 cursor-pointer ${
+          isExpanded ? "w-full p-2 flex items-center gap-3" : "p-2"
+        }`}
       >
         {/* Avatar */}
         {renderAvatar()}
+        {/* Email - shown when expanded */}
+        {isExpanded && !isGuest && user?.email && (
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-xs text-gray-700 font-medium truncate">
+              {user.email}
+            </p>
+          </div>
+        )}
+        {isExpanded && isGuest && (
+          <div className="flex-1 text-left min-w-0">
+            <p className="text-xs text-gray-500 truncate">Guest User</p>
+          </div>
+        )}
       </button>
 
       {/* Dropdown Menu */}

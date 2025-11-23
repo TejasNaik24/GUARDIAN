@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import VoiceChatContainer from "@/components/speechUI/VoiceChatContainer";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { MessageLoader } from "@/components/chat/MessageLoader";
 import { VerticalSidebar } from "@/components/chat/VerticalSidebar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +12,7 @@ import { useConversation } from "@/contexts/ConversationContext";
 export default function ChatPage() {
   const { isGuest } = useAuth();
   const { currentConversation } = useConversation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   return (
     <ProtectedRoute>
@@ -23,25 +22,19 @@ export default function ChatPage() {
         transition={{ duration: 0.5 }}
         className="h-screen relative flex"
       >
-        {/* Vertical Sidebar - Always visible for logged in users */}
+        {/* Unified Vertical Sidebar - Always visible for logged in users */}
         <VerticalSidebar
-          onToggleHistory={() => setSidebarOpen(!sidebarOpen)}
-          isHistoryOpen={sidebarOpen}
+          isExpanded={sidebarExpanded}
+          onToggle={() => setSidebarExpanded(!sidebarExpanded)}
         />
 
-        {/* Conversation Sidebar - only show for logged in users */}
-        {!isGuest && (
-          <ConversationSidebar
-            isOpen={sidebarOpen}
-            onToggle={() => setSidebarOpen(!sidebarOpen)}
-          />
-        )}
-
         {/* Main Chat Area */}
-        <div
-          className={`flex-1 flex flex-col transition-all ${
-            !isGuest ? "ml-16" : ""
-          } ${sidebarOpen && !isGuest ? "lg:ml-80" : ""}`}
+        <motion.div
+          animate={{
+            marginLeft: !isGuest ? (sidebarExpanded ? 240 : 64) : 0,
+          }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          className="flex-1 flex flex-col"
         >
           {/* Show message loader if conversation is selected, otherwise show voice chat */}
           {currentConversation && !isGuest ? (
@@ -49,7 +42,7 @@ export default function ChatPage() {
           ) : (
             <VoiceChatContainer />
           )}
-        </div>
+        </motion.div>
       </motion.div>
     </ProtectedRoute>
   );
