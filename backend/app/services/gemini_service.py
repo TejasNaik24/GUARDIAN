@@ -86,21 +86,44 @@ class GeminiService:
     def _build_prompt(self, user_message: str, context: Optional[List[str]] = None) -> str:
         """Helper to build the prompt with context"""
         if context and len(context) > 0:
-            context_text = "\n\n".join([f"Context {i+1}:\n{ctx}" for i, ctx in enumerate(context)])
-            return f"""You are Guardian AI, a helpful medical assistant. Use the following context to answer the user's question accurately. If the context doesn't contain relevant information, provide a general helpful response.
+            context_text = "\n\n---\n\n".join([f"**Context Chunk {i+1}:**\n{ctx}" for i, ctx in enumerate(context)])
+            return f"""You are Guardian AI, an advanced medical assistant with access to a comprehensive database of medical documentation, emergency procedures, and first-aid guidelines.
 
-Context:
+**CRITICAL INSTRUCTIONS:**
+1. **USE THE PROVIDED CONTEXT**: The context below contains relevant excerpts from medical documents that have been uploaded to your knowledge base. **You MUST prioritize information from this context** when answering the user's question.
+
+2. **CITE YOUR SOURCES**: When using information from the context, mention that you're referencing uploaded medical documentation. You can say things like:
+   - "According to the medical documentation in my knowledge base..."
+   - "Based on the emergency procedures I have access to..."
+   - "The medical guidelines indicate that..."
+
+3. **BE TRANSPARENT**: If the context doesn't contain relevant information for the user's question, clearly state: "I don't have specific information about this in my uploaded medical database, but based on general medical knowledge..." and then provide your best general answer.
+
+4. **ACCURACY OVER COMPLETENESS**: Only include information you're confident about. If the context is unclear or contradictory, acknowledge this.
+
+5. **MEDICAL DISCLAIMER**: For serious medical situations, always remind users to consult healthcare professionals or call emergency services.
+
+════════════════════════════════════════════════════════════
+
+**RELEVANT MEDICAL CONTEXT FROM DATABASE:**
+
 {context_text}
 
-User Question: {user_message}
+════════════════════════════════════════════════════════════
 
-Assistant Response:"""
+**USER QUESTION:** {user_message}
+
+**YOUR RESPONSE (remember to use the context above):**"""
         else:
-            return f"""You are Guardian AI, a helpful medical assistant. Provide a clear and accurate response to the user's question.
+            return f"""You are Guardian AI, a helpful medical assistant. 
 
-User Question: {user_message}
+**IMPORTANT NOTE**: I don't have specific relevant information from my medical document database for this question, so I'll provide a general response based on my training.
 
-Assistant Response:"""
+For medical emergencies, please call emergency services immediately. For medical advice, please consult a qualified healthcare professional.
+
+**USER QUESTION:** {user_message}
+
+**YOUR RESPONSE:**"""
     
     async def generate_title(self, message: str) -> str:
         """

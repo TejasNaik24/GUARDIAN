@@ -76,26 +76,28 @@ export default function VoiceChatContainer() {
 
   // Auto-scroll to bottom when USER sends a message (ChatGPT-style)
   useEffect(() => {
-    // Only scroll if there are at least 2 messages (skip first message)
-    if (displayMessages.length <= 1) return;
+    // Only scroll if there are messages
+    if (displayMessages.length === 0) return;
 
-    const lastMessage = displayMessages[displayMessages.length - 1];
-    if (lastMessage.isUser) {
-      // User sent a message, scroll to show the message
-      setTimeout(() => {
-        // Find the last message element by data attribute
-        const messageElements = document.querySelectorAll("[data-message-id]");
-        const lastMessageElement = messageElements[messageElements.length - 1];
-        if (lastMessageElement) {
-          lastMessageElement.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-            inline: "nearest",
-          });
-        }
-      }, 100); // Small delay to ensure DOM is updated
-    }
-  }, [displayMessages]); // Auto-hide disclaimer
+    // Find the most recent user message
+    const userMessages = displayMessages.filter(msg => msg.isUser);
+    if (userMessages.length === 0) return;
+
+    const lastUserMessage = userMessages[userMessages.length - 1];
+
+    // Scroll to the user's message after it's rendered
+    setTimeout(() => {
+      // Find the user's message element
+      const messageElement = document.querySelector(`[data-message-id="${lastUserMessage.id}"]`);
+      if (messageElement) {
+        messageElement.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+          inline: "nearest",
+        });
+      }
+    }, 100); // Small delay to ensure DOM is updated
+  }, [displayMessages.length]); // Trigger when message count changes // Auto-hide disclaimer
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowDisclaimer(false);
