@@ -3,10 +3,12 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { useConversation } from "@/contexts/ConversationContext";
+import { useGuardianRAG } from "@/hooks/useGuardianRAG";
 
 export function ConversationChatInput() {
   const { currentConversation, addMessage, createConversation } =
     useConversation();
+  const { chat } = useGuardianRAG();
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -36,18 +38,29 @@ export function ConversationChatInput() {
       // Add user message
       await addMessage(convId, "user", messageText);
 
-      // TODO: Here you would integrate your AI backend
-      // For now, we'll just add a placeholder assistant response
-      setTimeout(async () => {
+      // Call Guardian AI backend
+      const response = await chat(messageText, convId);
+
+      if (response) {
+        // Add assistant response
+        await addMessage(convId, "assistant", response.message);
+      } else {
+        // Fallback error message
         await addMessage(
-          convId!,
+          convId,
           "assistant",
-          "This is a placeholder response. Connect your AI backend to get real responses."
+          "Sorry, I couldn't process your request. Please try again."
         );
-        setIsSending(false);
-      }, 1000);
+      }
+
+      setIsSending(false);
     } catch (error) {
       console.error("Error sending message:", error);
+      await addMessage(
+        currentConversation?.id || "",
+        "assistant",
+        "An error occurred. Please try again."
+      );
       setIsSending(false);
     }
   };

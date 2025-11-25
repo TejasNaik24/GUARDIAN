@@ -9,6 +9,7 @@ import useSpeechRecognition from "@/hooks/useSpeechRecognition";
 import useSpeechSynthesis from "@/hooks/useSpeechSynthesis";
 import useChat from "@/hooks/useChat";
 import { useAuth } from "@/contexts/AuthContext";
+import { useGuardianRAG } from "@/hooks/useGuardianRAG";
 import AuthModal from "../auth/AuthModal";
 
 interface Message {
@@ -24,7 +25,11 @@ type ConversationState = "idle" | "listening" | "thinking" | "speaking";
 
 export default function VoiceChatContainer() {
   const { isGuest } = useAuth();
+  const { chat } = useGuardianRAG();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | undefined
+  >(undefined);
   const [isVoiceMode, setIsVoiceMode] = useState(true);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [voiceUploadedFiles, setVoiceUploadedFiles] = useState<File[]>([]);
@@ -63,34 +68,8 @@ export default function VoiceChatContainer() {
 
   const { speak, isSpeaking } = useSpeechSynthesis();
 
-  // Convert chat messages to display messages for text mode
-  const displayMessages: Message[] = isVoiceMode
-    ? messages
-    : chatMessages.map((msg) => {
-        // Create media URLs for files
-        const mediaUrl =
-          msg.media && msg.media.length > 0
-            ? URL.createObjectURL(msg.media[0])
-            : undefined;
-        const mediaType =
-          msg.media && msg.media[0]?.type.startsWith("video/")
-            ? "video"
-            : msg.media && msg.media[0]
-            ? "image"
-            : undefined;
-
-        return {
-          id: msg.id,
-          text: msg.content,
-          isUser: msg.role === "user",
-          timestamp: msg.timestamp.toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-          }),
-          mediaUrl,
-          mediaType,
-        };
-      });
+  // Use messages array for both voice and text modes since we call backend directly
+  const displayMessages: Message[] = messages;
 
   // Auto-scroll to bottom when USER sends a message (ChatGPT-style)
   useEffect(() => {
@@ -164,8 +143,9 @@ export default function VoiceChatContainer() {
     }
   }, [isListening]);
 
-  // Voice mode message handler (keeps old logic for voice)
-  const handleVoiceSendMessage = (text: string, media?: File) => {
+  // Voice mode message handler (calls Guardian backend)
+  const handleVoiceSendMessage = async (text: string, media?: File) => {
+    console.log("🎤 [VoiceChatContainer] Voice mode sending:", text);
     if (!text.trim() && !media) return;
 
     // Create media URL if file is present
@@ -190,16 +170,32 @@ export default function VoiceChatContainer() {
     };
     setMessages((prev) => [...prev, userMessage]);
 
-    // Simulate AI response
+    // Call Guardian AI backend with conversation_id if exists
     setConversationState("thinking");
-    setTimeout(() => {
-      const aiResponseText = media
-        ? "I can see the media you've shared. Based on what I'm seeing, I recommend consulting with a healthcare professional for a proper evaluation."
-        : "I understand your concern. Based on what you've told me, I recommend monitoring your symptoms closely. If they worsen or persist, please consult a healthcare professional.";
+
+    // Track start time for minimum display duration
+    const startTime = Date.now();
+
+    const response = await chat(text, currentConversationId);
+
+    // Ensure minimum 800ms display time for thinking state
+    const elapsed = Date.now() - startTime;
+    const minDisplayTime = 800;
+    if (elapsed < minDisplayTime) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, minDisplayTime - elapsed)
+      );
+    }
+
+    if (response) {
+      // Store conversation_id from response for future messages
+      if (response.conversation_id && !currentConversationId) {
+        setCurrentConversationId(response.conversation_id);
+      }
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: aiResponseText,
+        text: response.message,
         isUser: false,
         timestamp: new Date().toLocaleTimeString("en-US", {
           hour: "numeric",
@@ -209,16 +205,119 @@ export default function VoiceChatContainer() {
       setMessages((prev) => [...prev, aiMessage]);
 
       // Speak the response
-      speak(aiResponseText);
-    }, 2000);
+      setConversationState("speaking");
+      speak(response.message);
+    } else {
+      // Error handling
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I couldn't process your request. Please try again.",
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setConversationState("idle");
+    }
   };
 
-  // Text mode message handler (uses chat hook)
-  const handleTextSendMessage = (text: string, media?: File) => {
+  // Text mode message handler (calls Guardian backend too)
+  const handleTextSendMessage = async (text: string, media?: File) => {
     if (!text.trim() && !media) return;
 
-    // Call sendMessage directly with the values - no state sync needed
-    sendChatMessage(text, media ? [media] : []);
+    console.log("📝 [VoiceChatContainer] Text mode sending:", text);
+
+    // Create media URL if file is present
+    const mediaUrl = media ? URL.createObjectURL(media) : undefined;
+    const mediaType = media?.type.startsWith("video/")
+      ? "video"
+      : media
+      ? "image"
+      : undefined;
+
+    // Add user message
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: text || "Sent media",
+      isUser: true,
+      timestamp: new Date().toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+      mediaUrl,
+      mediaType,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    // Call Guardian AI backend
+    console.log(
+      "🔄 [VoiceChatContainer] Setting conversationState to 'thinking'"
+    );
+    setConversationState("thinking");
+
+    // Track start time for minimum display duration
+    const startTime = Date.now();
+    console.log("⏱️ [VoiceChatContainer] Start time:", startTime);
+
+    const response = await chat(text, currentConversationId);
+
+    // Ensure minimum 800ms display time for "Analyzing..." indicator
+    const elapsed = Date.now() - startTime;
+    const minDisplayTime = 800;
+    console.log(
+      "⏱️ [VoiceChatContainer] Elapsed:",
+      elapsed,
+      "ms, minDisplay:",
+      minDisplayTime,
+      "ms"
+    );
+    if (elapsed < minDisplayTime) {
+      const waitTime = minDisplayTime - elapsed;
+      console.log(
+        "⏱️ [VoiceChatContainer] Waiting additional:",
+        waitTime,
+        "ms"
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+
+    console.log(
+      "✅ [VoiceChatContainer] Response received, setting state to 'idle'"
+    );
+
+    if (response) {
+      // Store conversation_id from response
+      if (response.conversation_id && !currentConversationId) {
+        setCurrentConversationId(response.conversation_id);
+      }
+
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: response.message,
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+      setConversationState("idle");
+    } else {
+      // Error handling
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I couldn't process your request. Please try again.",
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setConversationState("idle");
+    }
   };
   const handleToggleMic = () => {
     setIsMuted(!isMuted);
@@ -537,54 +636,60 @@ export default function VoiceChatContainer() {
                         </div>
                       </motion.div>
                     ))}
-                  </AnimatePresence>
 
-                  {/* Loading indicator */}
-                  {isChatLoading && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="flex justify-start mb-4"
-                    >
-                      <div className="bg-white rounded-2xl px-5 py-3 shadow-sm border border-[#E5E7EB]">
-                        <div className="flex items-center gap-2">
-                          <div className="flex gap-1">
-                            <motion.div
-                              animate={{ scale: [1, 1.2, 1] }}
-                              transition={{
-                                duration: 0.6,
-                                repeat: Infinity,
-                                delay: 0,
-                              }}
-                              className="w-2 h-2 bg-[#3B82F6] rounded-full"
-                            />
-                            <motion.div
-                              animate={{ scale: [1, 1.2, 1] }}
-                              transition={{
-                                duration: 0.6,
-                                repeat: Infinity,
-                                delay: 0.2,
-                              }}
-                              className="w-2 h-2 bg-[#3B82F6] rounded-full"
-                            />
-                            <motion.div
-                              animate={{ scale: [1, 1.2, 1] }}
-                              transition={{
-                                duration: 0.6,
-                                repeat: Infinity,
-                                delay: 0.4,
-                              }}
-                              className="w-2 h-2 bg-[#3B82F6] rounded-full"
-                            />
+                    {/* Loading indicator - show when thinking */}
+                    {conversationState === "thinking" && (
+                      <motion.div
+                        key="thinking-indicator"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="flex justify-start mb-4"
+                        style={{
+                          border: "2px solid red",
+                          background: "yellow",
+                          zIndex: 9999,
+                        }}
+                      >
+                        <div className="bg-white rounded-2xl px-5 py-3 shadow-sm border border-[#E5E7EB]">
+                          <div className="flex items-center gap-2">
+                            <div className="flex gap-1">
+                              <motion.div
+                                animate={{ scale: [1, 1.2, 1] }}
+                                transition={{
+                                  duration: 0.6,
+                                  repeat: Infinity,
+                                  delay: 0,
+                                }}
+                                className="w-2 h-2 bg-[#3B82F6] rounded-full"
+                              />
+                              <motion.div
+                                animate={{ scale: [1, 1.2, 1] }}
+                                transition={{
+                                  duration: 0.6,
+                                  repeat: Infinity,
+                                  delay: 0.2,
+                                }}
+                                className="w-2 h-2 bg-[#3B82F6] rounded-full"
+                              />
+                              <motion.div
+                                animate={{ scale: [1, 1.2, 1] }}
+                                transition={{
+                                  duration: 0.6,
+                                  repeat: Infinity,
+                                  delay: 0.4,
+                                }}
+                                className="w-2 h-2 bg-[#3B82F6] rounded-full"
+                              />
+                            </div>
+                            <span className="text-sm text-[#64748B]">
+                              Analyzing...
+                            </span>
                           </div>
-                          <span className="text-sm text-[#64748B]">
-                            Guardian is thinking...
-                          </span>
                         </div>
-                      </div>
-                    </motion.div>
-                  )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   <div ref={messagesEndRef} className="h-[53vh]" />
                 </div>

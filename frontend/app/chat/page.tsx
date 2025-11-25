@@ -16,34 +16,27 @@ export default function ChatPage() {
 
   return (
     <ProtectedRoute>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="h-screen relative flex"
-      >
-        {/* Unified Vertical Sidebar - Always visible for logged in users */}
-        <VerticalSidebar
-          isExpanded={sidebarExpanded}
-          onToggle={() => setSidebarExpanded(!sidebarExpanded)}
-        />
+      <div className="min-h-screen bg-white">
+        <div className="flex h-screen">
+          {/* Unified Vertical Sidebar - Always visible for logged in users */}
+          <VerticalSidebar
+            isExpanded={sidebarExpanded}
+            onToggle={() => setSidebarExpanded(!sidebarExpanded)}
+          />
 
-        {/* Main Chat Area */}
-        <motion.div
-          animate={{
-            marginLeft: !isGuest ? (sidebarExpanded ? 240 : 64) : 0,
-          }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="flex-1 flex flex-col"
-        >
-          {/* Show message loader if conversation is selected, otherwise show voice chat */}
-          {currentConversation && !isGuest ? (
-            <MessageLoader />
-          ) : (
+          {/* Main Chat Area */}
+          <motion.div
+            animate={{
+              marginLeft: !isGuest ? (sidebarExpanded ? 240 : 64) : 0,
+            }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="flex-1 flex flex-col bg-white"
+          >
+            {/* Always use VoiceChatContainer - the original UI */}
             <VoiceChatContainer />
-          )}
-        </motion.div>
-      </motion.div>
+          </motion.div>
+        </div>
+      </div>
     </ProtectedRoute>
   );
 }
