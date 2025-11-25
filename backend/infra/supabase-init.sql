@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS messages (
 -- Documents table for vector embeddings
 CREATE TABLE IF NOT EXISTS documents (
     id TEXT PRIMARY KEY,
-    embedding vector(384),  -- Dimension for all-MiniLM-L6-v2
+    embedding vector(768),  -- Dimension for Gemini text-embedding-004
     content TEXT NOT NULL,
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -94,7 +94,7 @@ CREATE POLICY "Service role can manage documents"
 
 -- Function for vector similarity search
 CREATE OR REPLACE FUNCTION match_documents(
-    query_embedding vector(384),
+    query_embedding vector(768),
     match_threshold float DEFAULT 0.7,
     match_count int DEFAULT 5
 )

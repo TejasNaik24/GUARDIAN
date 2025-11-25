@@ -1,6 +1,6 @@
 """RAG (Retrieval Augmented Generation) service with embeddings"""
 from typing import List, Dict, Any
-from sentence_transformers import SentenceTransformer
+import google.generativeai as genai
 from app.database.vectorstore import VectorStore
 from app.config import get_settings
 from app.utils.logger import setup_logger
@@ -13,27 +13,31 @@ class RAGService:
     """Service for RAG operations: embedding, indexing, and retrieval"""
     
     def __init__(self):
-        """Initialize RAG service with embedding model and vector store"""
+        """Initialize RAG service with Gemini embedding model and vector store"""
         settings = get_settings()
-        self.embedding_model = SentenceTransformer(settings.embedding_model_name)
+        genai.configure(api_key=settings.google_api_key)
         self.vector_store = VectorStore()
-        logger.info(f"✅ RAG service initialized with model: {settings.embedding_model_name}")
+        logger.info("✅ RAG service initialized with Gemini text-embedding-004")
     
     def embed_text(self, text: str) -> List[float]:
         """
-        Generate embedding vector for text
+        Generate embedding vector for text using Gemini
         
         Args:
             text: Input text to embed
             
         Returns:
-            List of floats representing embedding vector
+            List of floats representing embedding vector (768 dimensions)
         """
         try:
-            embedding = self.embedding_model.encode(text, convert_to_numpy=True)
-            return embedding.tolist()
+            result = genai.embed_content(
+                model="models/text-embedding-004",
+                content=text,
+                task_type="retrieval_document"
+            )
+            return result['embedding']
         except Exception as e:
-            logger.error(f"❌ Error embedding text: {str(e)}")
+            logger.error(f"❌ Error embedding text with Gemini: {str(e)}")
             raise
     
     async def search_similar(
@@ -43,7 +47,7 @@ class RAGService:
         similarity_threshold: float = 0.7
     ) -> List[Dict[str, Any]]:
         """
-        Search for similar documents using semantic search
+        Search for similar documents using semantic search with Gemini embeddings
         
         Args:
             query: Search query text
@@ -54,9 +58,14 @@ class RAGService:
             List of similar documents with content and metadata
         """
         try:
-            # Generate query embedding
+            # Generate query embedding using Gemini
             logger.info(f"🔍 Searching for: {query[:50]}...")
-            query_embedding = self.embed_text(query)
+            result = genai.embed_content(
+                model="models/text-embedding-004",
+                content=query,
+                task_type="retrieval_query"
+            )
+            query_embedding = result['embedding']
             
             # Search vector store
             results = await self.vector_store.query_embedding(
@@ -74,19 +83,25 @@ class RAGService:
     
     async def ingest_documents(
         self,
-        documents: List[Dict[str, Any]]
+        documents: List[Dict[str, Any]],
+        chunk_size: int = 500,
+        overlap: int = 50
     ) -> List[str]:
         """
-        Ingest multiple documents into vector store
+        Ingest multiple documents into vector store with chunking
         
         Args:
             documents: List of documents with 'content' and 'metadata'
+            chunk_size: Target chunk size in characters
+            overlap: Number of overlapping characters between chunks
             
         Returns:
-            List of document IDs
+            List of chunk IDs
         """
         try:
-            doc_ids = []
+            from app.utils.text_cleaner import clean_text, chunk_text
+            
+            chunk_ids = []
             
             for doc in documents:
                 content = doc.get("content", "")
@@ -95,24 +110,37 @@ class RAGService:
                 if not content.strip():
                     continue
                 
-                # Generate document ID from content hash
-                doc_id = hashlib.md5(content.encode()).hexdigest()
+                # Clean text
+                cleaned_content = clean_text(content)
                 
-                # Generate embedding
-                embedding = self.embed_text(content)
+                # Split into chunks with overlap
+                chunks = chunk_text(cleaned_content, chunk_size=chunk_size, overlap=overlap)
                 
-                # Store in vector database
-                await self.vector_store.upsert_embedding(
-                    doc_id=doc_id,
-                    embedding=embedding,
-                    content=content,
-                    metadata=metadata
-                )
-                
-                doc_ids.append(doc_id)
+                # Process each chunk
+                for chunk_idx, chunk in enumerate(chunks):
+                    # Generate unique chunk ID
+                    chunk_hash = hashlib.md5(f"{content[:100]}_{chunk_idx}".encode()).hexdigest()
+                    
+                    # Generate embedding using Gemini
+                    embedding = self.embed_text(chunk)
+                    
+                    # Add chunk metadata
+                    chunk_metadata = metadata.copy()
+                    chunk_metadata["chunk_index"] = chunk_idx
+                    chunk_metadata["total_chunks"] = len(chunks)
+                    
+                    # Store in vector database
+                    await self.vector_store.upsert_embedding(
+                        doc_id=chunk_hash,
+                        embedding=embedding,
+                        content=chunk,
+                        metadata=chunk_metadata
+                    )
+                    
+                    chunk_ids.append(chunk_hash)
             
-            logger.info(f"✅ Ingested {len(doc_ids)} documents")
-            return doc_ids
+            logger.info(f"✅ Ingested {len(chunk_ids)} chunks from {len(documents)} documents")
+            return chunk_ids
             
         except Exception as e:
             logger.error(f"❌ Error ingesting documents: {str(e)}")

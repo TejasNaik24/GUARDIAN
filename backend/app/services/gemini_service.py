@@ -14,8 +14,9 @@ class GeminiService:
         """Initialize Gemini service with API key"""
         settings = get_settings()
         genai.configure(api_key=settings.google_api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
-        logger.info("✅ Gemini service initialized")
+        # Use gemini-2.5-flash which is available in your API
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        logger.info("✅ Gemini service initialized with gemini-2.5-flash")
     
     async def generate_response(
         self,

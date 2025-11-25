@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     supabase_anon_key: str
     
     # RAG Configuration
-    embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     vector_db_provider: str = "supabase"
     
     # App Configuration

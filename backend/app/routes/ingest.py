@@ -41,26 +41,36 @@ async def ingest_pdf(
         content = await file.read()
         pdf_reader = PdfReader(io.BytesIO(content))
         
-        # Extract text from all pages
-        text_chunks = []
+        # Extract text from all pages and combine
+        full_text = ""
+        page_boundaries = []  # Track which chunk came from which page
+        
         for page_num, page in enumerate(pdf_reader.pages):
             text = page.extract_text()
             if text.strip():
-                text_chunks.append({
-                    "content": text,
-                    "metadata": {
-                        "source": file.filename,
-                        "page": page_num + 1,
-                        "user_id": current_user.id
-                    }
-                })
+                page_boundaries.append((len(full_text), page_num + 1))
+                full_text += text + "\n\n"
         
-        if not text_chunks:
+        if not full_text.strip():
             raise HTTPException(status_code=400, detail="No text content found in PDF")
         
-        # Ingest into RAG
+        # Prepare document with metadata for chunking and embedding
+        document = {
+            "content": full_text,
+            "metadata": {
+                "source": file.filename,
+                "user_id": current_user.id,
+                "total_pages": len(pdf_reader.pages)
+            }
+        }
+        
+        # Ingest into RAG with chunking (chunks with overlap)
         rag_service = RAGService()
-        doc_ids = await rag_service.ingest_documents(text_chunks)
+        doc_ids = await rag_service.ingest_documents(
+            [document],
+            chunk_size=500,
+            overlap=50
+        )
         
         logger.info(f"✅ Ingested {len(doc_ids)} chunks from {file.filename}")
         
