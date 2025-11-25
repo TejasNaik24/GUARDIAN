@@ -10,7 +10,9 @@ import useSpeechSynthesis from "@/hooks/useSpeechSynthesis";
 import useChat from "@/hooks/useChat";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGuardianRAG } from "@/hooks/useGuardianRAG";
+import { useConversation } from "@/contexts/ConversationContext";
 import AuthModal from "../auth/AuthModal";
+import type { Message as ContextMessage } from "@/types/conversation";
 
 interface Message {
   id: string;
@@ -26,6 +28,7 @@ type ConversationState = "idle" | "listening" | "thinking" | "speaking";
 export default function VoiceChatContainer() {
   const { isGuest } = useAuth();
   const { chat } = useGuardianRAG();
+  const { messages: contextMessages, currentConversation } = useConversation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<
     string | undefined
@@ -100,6 +103,26 @@ export default function VoiceChatContainer() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Sync messages when currentConversation changes (user clicks on past conversation)
+  useEffect(() => {
+    if (currentConversation) {
+      // Convert context messages to local message format
+      const convertedMessages: Message[] = contextMessages.map((msg) => ({
+        id: msg.id,
+        text: msg.content,
+        isUser: msg.role === "user",
+        timestamp: new Date(msg.created_at).toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      }));
+
+      setMessages(convertedMessages);
+      setCurrentConversationId(currentConversation.id);
+      console.log("📋 [VoiceChatContainer] Loaded", convertedMessages.length, "messages from conversation:", currentConversation.id);
+    }
+  }, [currentConversation, contextMessages]);
+
   // Update conversation state based on speech status
   useEffect(() => {
     if (isVoiceMode) {
@@ -117,14 +140,9 @@ export default function VoiceChatContainer() {
       } else if (!isListening && !isSpeaking) {
         setConversationState("idle");
       }
-    } else {
-      // Text mode - use chat loading state
-      if (isChatLoading) {
-        setConversationState("thinking");
-      } else {
-        setConversationState("idle");
-      }
     }
+    // Text mode - manual state management in handlers
+    // Don't automatically manage state here to avoid conflicts with streaming
   }, [
     isListening,
     isSpeaking,
@@ -143,6 +161,46 @@ export default function VoiceChatContainer() {
     }
   }, [isListening]);
 
+  const [thinkingText, setThinkingText] = useState("Analyzing");
+  const streamingContentRef = useRef("");
+  const streamingMessageIdRef = useRef<string | null>(null);
+
+  // Typing effect loop
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!streamingMessageIdRef.current) return;
+
+      setMessages((prev) => {
+        const msgIndex = prev.findIndex(m => m.id === streamingMessageIdRef.current);
+        if (msgIndex === -1) return prev;
+
+        const currentText = prev[msgIndex].text;
+        const targetText = streamingContentRef.current;
+
+        if (currentText.length < targetText.length) {
+          // Add 1-2 chars per frame for smooth typing
+          // 20ms interval = 50 frames/sec
+          // 1 char/frame = 50 chars/sec (good speed)
+          // Adjust based on how far behind we are
+          const charsBehind = targetText.length - currentText.length;
+          const speedMultiplier = charsBehind > 50 ? 3 : charsBehind > 20 ? 2 : 1;
+
+          const nextChars = targetText.slice(currentText.length, currentText.length + speedMultiplier);
+
+          const newMessages = [...prev];
+          newMessages[msgIndex] = {
+            ...newMessages[msgIndex],
+            text: currentText + nextChars
+          };
+          return newMessages;
+        }
+        return prev;
+      });
+    }, 20);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Voice mode message handler (calls Guardian backend)
   const handleVoiceSendMessage = async (text: string, media?: File) => {
     console.log("🎤 [VoiceChatContainer] Voice mode sending:", text);
@@ -153,8 +211,8 @@ export default function VoiceChatContainer() {
     const mediaType = media?.type.startsWith("video/")
       ? "video"
       : media
-      ? "image"
-      : undefined;
+        ? "image"
+        : undefined;
 
     // Add user message
     const userMessage: Message = {
@@ -170,22 +228,52 @@ export default function VoiceChatContainer() {
     };
     setMessages((prev) => [...prev, userMessage]);
 
+    // Create empty assistant message immediately
+    const assistantMessageId = (Date.now() + 1).toString();
+    const assistantMessage: Message = {
+      id: assistantMessageId,
+      text: "", // EMPTY - will be filled by streaming
+      isUser: false,
+      timestamp: new Date().toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    };
+    setMessages((prev) => [...prev, assistantMessage]);
+
+    // Setup streaming refs
+    streamingMessageIdRef.current = assistantMessageId;
+    streamingContentRef.current = "";
+
     // Call Guardian AI backend with conversation_id if exists
+    setThinkingText("Analyzing");
     setConversationState("thinking");
 
     // Track start time for minimum display duration
     const startTime = Date.now();
 
-    const response = await chat(text, currentConversationId);
+    const response = await chat(
+      text,
+      currentConversationId,
+      (chunk: string) => {
+        // Just update the target content, the useEffect loop handles the UI update
+        streamingContentRef.current += chunk;
 
-    // Ensure minimum 800ms display time for thinking state
-    const elapsed = Date.now() - startTime;
-    const minDisplayTime = 800;
-    if (elapsed < minDisplayTime) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, minDisplayTime - elapsed)
-      );
-    }
+        // If we have received some text, we can switch from thinking to speaking/idle
+        if (streamingContentRef.current.length > 0 && conversationState === "thinking") {
+          // We keep it in thinking or switch to a "streaming" state if we had one
+        }
+      },
+      (status: string) => {
+        console.log("📊 [VoiceChatContainer] Status received:", status);
+        if (status === "generating") {
+          setThinkingText("Thinking...");
+        }
+      }
+    );
+
+    // Let's clear thinking state as soon as we get response or error
+    setConversationState("idle");
 
     if (response) {
       // Store conversation_id from response for future messages
@@ -193,24 +281,20 @@ export default function VoiceChatContainer() {
         setCurrentConversationId(response.conversation_id);
       }
 
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: response.message,
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-      };
-      setMessages((prev) => [...prev, aiMessage]);
+      // Ensure the final message is set correctly (in case of any missed updates)
+      // We update the REF to the final message, and let the loop catch up
+      streamingContentRef.current = response.message;
 
       // Speak the response
       setConversationState("speaking");
       speak(response.message);
     } else {
-      // Error handling
+      // Error handling - remove the empty message and show error
+      setMessages((prev) => prev.filter(m => m.id !== assistantMessageId));
+      streamingMessageIdRef.current = null;
+
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + 2).toString(),
         text: "Sorry, I couldn't process your request. Please try again.",
         isUser: false,
         timestamp: new Date().toLocaleTimeString("en-US", {
@@ -234,8 +318,8 @@ export default function VoiceChatContainer() {
     const mediaType = media?.type.startsWith("video/")
       ? "video"
       : media
-      ? "image"
-      : undefined;
+        ? "image"
+        : undefined;
 
     // Add user message
     const userMessage: Message = {
@@ -251,41 +335,66 @@ export default function VoiceChatContainer() {
     };
     setMessages((prev) => [...prev, userMessage]);
 
+    // Create empty assistant message immediately
+    const assistantMessageId = (Date.now() + 1).toString();
+    const assistantMessage: Message = {
+      id: assistantMessageId,
+      text: "", // EMPTY - will be filled by streaming
+      isUser: false,
+      timestamp: new Date().toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    };
+    setMessages((prev) => [...prev, assistantMessage]);
+
+    // Setup streaming refs
+    streamingMessageIdRef.current = assistantMessageId;
+    streamingContentRef.current = "";
+
     // Call Guardian AI backend
     console.log(
       "🔄 [VoiceChatContainer] Setting conversationState to 'thinking'"
     );
+    setThinkingText("Analyzing");
     setConversationState("thinking");
 
     // Track start time for minimum display duration
     const startTime = Date.now();
     console.log("⏱️ [VoiceChatContainer] Start time:", startTime);
 
-    const response = await chat(text, currentConversationId);
+    const response = await chat(
+      text,
+      currentConversationId,
+      (chunk: string) => {
+        // Just update the target content, the useEffect loop handles the UI update
+        streamingContentRef.current += chunk;
 
-    // Ensure minimum 800ms display time for "Analyzing..." indicator
+        // Stop "thinking" animation as soon as we get the first chunk
+        if (streamingContentRef.current.length > 0) {
+          setConversationState("idle");
+        }
+      },
+      (status: string) => {
+        console.log("📊 [VoiceChatContainer] Status received:", status);
+        if (status === "generating") {
+          setThinkingText("Thinking...");
+        }
+      }
+    );
+
+    // Ensure minimum 800ms display time for "Analyzing" indicator ONLY if we haven't started streaming yet
     const elapsed = Date.now() - startTime;
     const minDisplayTime = 800;
-    console.log(
-      "⏱️ [VoiceChatContainer] Elapsed:",
-      elapsed,
-      "ms, minDisplay:",
-      minDisplayTime,
-      "ms"
-    );
-    if (elapsed < minDisplayTime) {
-      const waitTime = minDisplayTime - elapsed;
-      console.log(
-        "⏱️ [VoiceChatContainer] Waiting additional:",
-        waitTime,
-        "ms"
-      );
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
+
+    if (!streamingContentRef.current && elapsed < minDisplayTime) {
+      // Only wait if we haven't received any text yet
     }
 
     console.log(
       "✅ [VoiceChatContainer] Response received, setting state to 'idle'"
     );
+    setConversationState("idle");
 
     if (response) {
       // Store conversation_id from response
@@ -293,21 +402,16 @@ export default function VoiceChatContainer() {
         setCurrentConversationId(response.conversation_id);
       }
 
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: response.message,
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-      };
-      setMessages((prev) => [...prev, aiMessage]);
-      setConversationState("idle");
+      // Final update to ensure consistency
+      // We update the REF to the final message, and let the loop catch up
+      streamingContentRef.current = response.message;
     } else {
       // Error handling
+      setMessages((prev) => prev.filter(m => m.id !== assistantMessageId));
+      streamingMessageIdRef.current = null;
+
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + 2).toString(),
         text: "Sorry, I couldn't process your request. Please try again.",
         isUser: false,
         timestamp: new Date().toLocaleTimeString("en-US", {
@@ -432,9 +536,8 @@ export default function VoiceChatContainer() {
             <div className="bg-white rounded-full px-2 py-2 shadow-md border border-[#E5E7EB] inline-flex items-center gap-2">
               <button
                 onClick={() => isVoiceMode && handleToggleMode()}
-                className={`relative px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                  !isVoiceMode ? "text-white" : "text-[#64748B]"
-                }`}
+                className={`relative px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${!isVoiceMode ? "text-white" : "text-[#64748B]"
+                  }`}
               >
                 {!isVoiceMode && (
                   <motion.div
@@ -463,9 +566,8 @@ export default function VoiceChatContainer() {
 
               <button
                 onClick={() => !isVoiceMode && handleToggleMode()}
-                className={`relative px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                  isVoiceMode ? "text-white" : "text-[#64748B]"
-                }`}
+                className={`relative px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${isVoiceMode ? "text-white" : "text-[#64748B]"
+                  }`}
               >
                 {isVoiceMode && (
                   <motion.div
@@ -522,9 +624,8 @@ export default function VoiceChatContainer() {
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
-        className={`flex-1 px-4 md:px-6 py-6 pb-24 md:pb-6 ${
-          displayMessages.length <= 1 ? "overflow-hidden" : "overflow-y-auto"
-        }`}
+        className={`flex-1 px-4 md:px-6 py-6 pb-24 md:pb-6 ${displayMessages.length <= 1 ? "overflow-hidden" : "overflow-y-auto"
+          }`}
       >
         <div className="max-w-4xl mx-auto">
           {isVoiceMode ? (
@@ -550,7 +651,7 @@ export default function VoiceChatContainer() {
                       isVoiceMode={isVoiceMode}
                       onToggleMode={handleToggleMode}
                       isListening={isListening}
-                      onToggleMic={() => {}}
+                      onToggleMic={() => { }}
                       onSendMessage={handleTextSendMessage}
                       disabled={isChatLoading}
                       currentTranscript={transcript}
@@ -560,82 +661,79 @@ export default function VoiceChatContainer() {
               ) : (
                 <div className="space-y-4">
                   <AnimatePresence mode="popLayout">
-                    {displayMessages.map((message) => (
-                      <motion.div
-                        key={message.id}
-                        data-message-id={message.id}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.15, ease: "easeOut" }}
-                      >
-                        {/* Media attachment - show first */}
-                        {message.mediaUrl && (
-                          <div
-                            className={`mb-3 ${
-                              message.isUser
+                    {displayMessages
+                      .filter((message) => message.text || message.mediaUrl)
+                      .map((message) => (
+                        <motion.div
+                          key={message.id}
+                          data-message-id={message.id}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.15, ease: "easeOut" }}
+                        >
+                          {/* Media attachment - show first */}
+                          {message.mediaUrl && (
+                            <div
+                              className={`mb-3 ${message.isUser
                                 ? "flex justify-end"
                                 : "flex justify-start"
-                            }`}
-                          >
-                            <div
-                              onClick={() => {
-                                if (message.mediaType !== "video") {
-                                  setPreviewImage(message.mediaUrl!);
-                                }
-                              }}
-                              className={`max-w-xs rounded-xl overflow-hidden shadow-md border border-[#E5E7EB] ${
-                                message.mediaType !== "video"
+                                }`}
+                            >
+                              <div
+                                onClick={() => {
+                                  if (message.mediaType !== "video") {
+                                    setPreviewImage(message.mediaUrl!);
+                                  }
+                                }}
+                                className={`max-w-xs rounded-xl overflow-hidden shadow-md border border-[#E5E7EB] ${message.mediaType !== "video"
                                   ? "cursor-pointer"
                                   : ""
-                              }`}
+                                  }`}
+                              >
+                                {message.mediaType === "video" ? (
+                                  <video
+                                    src={message.mediaUrl}
+                                    controls
+                                    className="w-full"
+                                  />
+                                ) : (
+                                  <img
+                                    src={message.mediaUrl}
+                                    alt="Shared media"
+                                    className="w-full"
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {/* Text message bubble */}
+                          <div
+                            className={`flex w-full ${message.isUser ? "justify-end" : "justify-start"
+                              } mb-4`}
+                          >
+                            <div
+                              className={`flex flex-col max-w-[80%] md:max-w-[70%] ${message.isUser ? "items-end" : "items-start"
+                                }`}
                             >
-                              {message.mediaType === "video" ? (
-                                <video
-                                  src={message.mediaUrl}
-                                  controls
-                                  className="w-full"
-                                />
-                              ) : (
-                                <img
-                                  src={message.mediaUrl}
-                                  alt="Shared media"
-                                  className="w-full"
-                                />
+                              <div
+                                className={`rounded-2xl px-5 py-3 shadow-sm ${message.isUser
+                                  ? "bg-linear-to-br from-[#3B82F6] to-[#60A5FA] text-white"
+                                  : "bg-white text-[#1E3A8A] border border-[#E5E7EB]"
+                                  }`}
+                              >
+                                <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap wrap-break-word">
+                                  {message.text}
+                                </p>
+                              </div>
+                              {message.timestamp && (
+                                <span className="text-xs text-[#64748B] mt-1 px-2">
+                                  {message.timestamp}
+                                </span>
                               )}
                             </div>
                           </div>
-                        )}
-                        {/* Text message bubble */}
-                        <div
-                          className={`flex w-full ${
-                            message.isUser ? "justify-end" : "justify-start"
-                          } mb-4`}
-                        >
-                          <div
-                            className={`flex flex-col max-w-[80%] md:max-w-[70%] ${
-                              message.isUser ? "items-end" : "items-start"
-                            }`}
-                          >
-                            <div
-                              className={`rounded-2xl px-5 py-3 shadow-sm ${
-                                message.isUser
-                                  ? "bg-linear-to-br from-[#3B82F6] to-[#60A5FA] text-white"
-                                  : "bg-white text-[#1E3A8A] border border-[#E5E7EB]"
-                              }`}
-                            >
-                              <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap wrap-break-word">
-                                {message.text}
-                              </p>
-                            </div>
-                            {message.timestamp && (
-                              <span className="text-xs text-[#64748B] mt-1 px-2">
-                                {message.timestamp}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      ))}
 
                     {/* Loading indicator - show when thinking */}
                     {conversationState === "thinking" && (
@@ -645,14 +743,12 @@ export default function VoiceChatContainer() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
                         className="flex justify-start mb-4"
-                        style={{
-                          border: "2px solid red",
-                          background: "yellow",
-                          zIndex: 9999,
-                        }}
                       >
                         <div className="bg-white rounded-2xl px-5 py-3 shadow-sm border border-[#E5E7EB]">
                           <div className="flex items-center gap-2">
+                            <span className="text-sm text-[#64748B]">
+                              {thinkingText}
+                            </span>
                             <div className="flex gap-1">
                               <motion.div
                                 animate={{ scale: [1, 1.2, 1] }}
@@ -682,9 +778,6 @@ export default function VoiceChatContainer() {
                                 className="w-2 h-2 bg-[#3B82F6] rounded-full"
                               />
                             </div>
-                            <span className="text-sm text-[#64748B]">
-                              Analyzing...
-                            </span>
                           </div>
                         </div>
                       </motion.div>
@@ -704,11 +797,10 @@ export default function VoiceChatContainer() {
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-        className={`px-4 md:px-6 py-6 pb-6 ${
-          displayMessages.length === 0 && !isVoiceMode
-            ? "hidden"
-            : "fixed bottom-0 left-0 right-0 md:relative"
-        }`}
+        className={`px-4 md:px-6 py-6 pb-6 ${displayMessages.length === 0 && !isVoiceMode
+          ? "hidden"
+          : "fixed bottom-0 left-0 right-0 md:relative"
+          }`}
       >
         <div className="max-w-3xl mx-auto">
           {isVoiceMode ? (
@@ -732,24 +824,22 @@ export default function VoiceChatContainer() {
                           {file.type.startsWith("video/") ? (
                             <video
                               src={URL.createObjectURL(file)}
-                              className={`${
-                                voiceUploadedFiles.length === 1
-                                  ? "w-24 h-20"
-                                  : voiceUploadedFiles.length === 2
+                              className={`${voiceUploadedFiles.length === 1
+                                ? "w-24 h-20"
+                                : voiceUploadedFiles.length === 2
                                   ? "w-20 h-16"
                                   : "w-16 h-14"
-                              } object-cover`}
+                                } object-cover`}
                               controls
                             />
                           ) : file.type.startsWith("audio/") ? (
                             <div
-                              className={`${
-                                voiceUploadedFiles.length === 1
-                                  ? "w-24 h-20"
-                                  : voiceUploadedFiles.length === 2
+                              className={`${voiceUploadedFiles.length === 1
+                                ? "w-24 h-20"
+                                : voiceUploadedFiles.length === 2
                                   ? "w-20 h-16"
                                   : "w-16 h-14"
-                              } bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] flex items-center justify-center`}
+                                } bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] flex items-center justify-center`}
                             >
                               <svg
                                 className="w-6 h-6 text-white"
@@ -769,13 +859,12 @@ export default function VoiceChatContainer() {
                             <img
                               src={URL.createObjectURL(file)}
                               alt="Upload preview"
-                              className={`${
-                                voiceUploadedFiles.length === 1
-                                  ? "w-24 h-20"
-                                  : voiceUploadedFiles.length === 2
+                              className={`${voiceUploadedFiles.length === 1
+                                ? "w-24 h-20"
+                                : voiceUploadedFiles.length === 2
                                   ? "w-20 h-16"
                                   : "w-16 h-14"
-                              } object-cover`}
+                                } object-cover`}
                             />
                           )}
                         </div>
@@ -819,11 +908,10 @@ export default function VoiceChatContainer() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleToggleMic}
-                  className={`p-5 rounded-full transition-all cursor-pointer shadow-md ${
-                    isMuted
-                      ? "bg-[#EF4444] text-white"
-                      : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0]"
-                  }`}
+                  className={`p-5 rounded-full transition-all cursor-pointer shadow-md ${isMuted
+                    ? "bg-[#EF4444] text-white"
+                    : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0]"
+                    }`}
                   aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
                 >
                   {isMuted ? (
@@ -887,11 +975,10 @@ export default function VoiceChatContainer() {
                       fileInputRef.current?.click()
                     }
                     disabled={voiceUploadedFiles.length >= 4}
-                    className={`p-5 rounded-full transition-colors shadow-md ${
-                      voiceUploadedFiles.length >= 4
-                        ? "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
-                        : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] cursor-pointer"
-                    }`}
+                    className={`p-5 rounded-full transition-colors shadow-md ${voiceUploadedFiles.length >= 4
+                      ? "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
+                      : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] cursor-pointer"
+                      }`}
                     aria-label="Upload media"
                   >
                     <svg
@@ -923,7 +1010,7 @@ export default function VoiceChatContainer() {
               isVoiceMode={isVoiceMode}
               onToggleMode={handleToggleMode}
               isListening={isListening}
-              onToggleMic={() => {}}
+              onToggleMic={() => { }}
               onSendMessage={handleTextSendMessage}
               disabled={isChatLoading}
               currentTranscript={transcript}

@@ -36,7 +36,7 @@ export function VerticalSidebar({
     <motion.div
       animate={{ width: isExpanded ? 240 : 64 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="fixed left-0 top-0 h-full bg-[#f9f9f9] border-r border-gray-200 flex flex-col py-4 z-50"
+      className="fixed left-0 top-0 h-full bg-[#f9f9f9] border-r border-gray-200 flex flex-col py-4 z-[200]"
     >
       {/* Guardian Logo at Top */}
       <div className="mb-6 px-3">
@@ -75,9 +75,8 @@ export function VerticalSidebar({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={onToggle}
-          className={`w-full h-10 rounded-lg bg-white hover:bg-gray-100 flex items-center transition-colors border border-gray-200 ${
-            isExpanded ? "gap-3 px-3" : "justify-center"
-          }`}
+          className={`w-full h-10 rounded-lg bg-white hover:bg-gray-100 flex items-center transition-colors border border-gray-200 ${isExpanded ? "gap-3 px-3" : "justify-center"
+            }`}
           title="Toggle sidebar"
         >
           <svg
@@ -121,9 +120,8 @@ export function VerticalSidebar({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={handleNewChat}
-          className={`w-full h-10 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center shadow-sm transition-all ${
-            isExpanded ? "gap-3 px-3" : "justify-center"
-          }`}
+          className={`w-full h-10 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center shadow-sm transition-all ${isExpanded ? "gap-3 px-3" : "justify-center"
+            }`}
           title="New chat"
         >
           <svg
@@ -213,9 +211,8 @@ export function VerticalSidebar({
       {/* User Profile Icon at Bottom */}
       <div className="mt-auto pt-4 border-t border-gray-200">
         <div
-          className={`flex items-center ${
-            isExpanded ? "px-3 justify-start" : "pl-2 justify-start"
-          }`}
+          className={`flex items-center ${isExpanded ? "px-3 justify-start" : "pl-2 justify-start"
+            }`}
         >
           <UserProfileMenu isExpanded={isExpanded} />
         </div>

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   sendChatMessage,
+  sendChatMessageStream,
   uploadPDF,
   uploadText,
   checkBackendHealth,
@@ -43,7 +44,9 @@ export function useGuardianRAG() {
    */
   const chat = async (
     message: string,
-    conversationId?: string
+    conversationId?: string,
+    onChunk?: (chunk: string) => void,
+    onStatus?: (status: string) => void
   ): Promise<ChatResponse | null> => {
     setLoading(true);
     setError(null);
@@ -56,18 +59,41 @@ export function useGuardianRAG() {
       const token = await getToken();
       console.log("🔵 [useGuardianRAG] Got token:", token ? "✓" : "✗");
 
-      const response = await sendChatMessage(message, token, conversationId);
-      console.log("🔵 [useGuardianRAG] Response:", response);
-
-      return response;
+      if (onChunk) {
+        // Use streaming
+        return new Promise<ChatResponse | null>((resolve) => {
+          sendChatMessageStream(
+            message,
+            token,
+            conversationId,
+            onChunk,
+            (response) => {
+              console.log("🔵 [useGuardianRAG] Stream complete:", response);
+              setLoading(false);
+              resolve(response);
+            },
+            onStatus
+          ).catch((err) => {
+            const errorMsg = err.message || "Failed to send message";
+            setError(errorMsg);
+            console.error("🔴 [useGuardianRAG] Chat error:", err);
+            setLoading(false);
+            resolve(null);
+          });
+        });
+      } else {
+        // Use standard request
+        const response = await sendChatMessage(message, token, conversationId);
+        console.log("🔵 [useGuardianRAG] Response:", response);
+        return response;
+      }
     } catch (err: any) {
       const errorMsg = err.message || "Failed to send message";
       setError(errorMsg);
       console.error("🔴 [useGuardianRAG] Chat error:", err);
       console.error("🔴 [useGuardianRAG] Error message:", errorMsg);
-      return null;
-    } finally {
       setLoading(false);
+      return null;
     }
   };
 

@@ -79,6 +79,97 @@ export async function sendChatMessage(
 }
 
 /**
+ * Send chat message with streaming response (SSE)
+ */
+export async function sendChatMessageStream(
+  message: string,
+  token: string,
+  conversationId: string | undefined,
+  onChunk: (chunk: string) => void,
+  onComplete: (response: ChatResponse) => void,
+  onStatus?: (status: string) => void
+): Promise<void> {
+  const headers = await getAuthHeaders(token);
+
+  console.log("🟢 [guardianApi] Sending streaming chat message...");
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/chat/stream`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        message,
+        conversation_id: conversationId,
+      } as ChatRequest),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Stream request failed: ${response.status}`);
+    }
+
+    if (!response.body) {
+      throw new Error("Response body is null");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    let conversationIdReceived = conversationId || "";
+    let fullMessage = "";
+    let sources: any[] = [];
+    let role = "assistant";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split("\n\n");
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            console.log("🔍 [guardianApi] Parsed SSE data:", data);
+
+            if (data.conversation_id) {
+              conversationIdReceived = data.conversation_id;
+            } else if (data.status) {
+              console.log("📊 [guardianApi] Status event received:", data.status);
+              if (onStatus) onStatus(data.status);
+            } else if (data.chunk) {
+              fullMessage += data.chunk;
+              onChunk(data.chunk);
+            } else if (data.sources) {
+              sources = data.sources;
+            } else if (data.error) {
+              console.error("🔴 [guardianApi] Stream error:", data.error);
+              throw new Error(data.error);
+            } else if (data.done) {
+              // Stream complete
+            }
+          } catch (e) {
+            console.error("Error parsing SSE data:", e);
+          }
+        }
+      }
+    }
+
+    // Call onComplete with full response
+    onComplete({
+      conversation_id: conversationIdReceived,
+      message: fullMessage,
+      role,
+      sources
+    });
+
+  } catch (error) {
+    console.error("🔴 [guardianApi] Streaming error:", error);
+    throw error;
+  }
+}
+
+/**
  * Upload PDF file for RAG ingestion
  */
 export async function uploadPDF(

@@ -35,22 +35,7 @@ class GeminiService:
         """
         try:
             # Build prompt with context
-            if context and len(context) > 0:
-                context_text = "\n\n".join([f"Context {i+1}:\n{ctx}" for i, ctx in enumerate(context)])
-                prompt = f"""You are Guardian AI, a helpful medical assistant. Use the following context to answer the user's question accurately. If the context doesn't contain relevant information, provide a general helpful response.
-
-Context:
-{context_text}
-
-User Question: {user_message}
-
-Assistant Response:"""
-            else:
-                prompt = f"""You are Guardian AI, a helpful medical assistant. Provide a clear and accurate response to the user's question.
-
-User Question: {user_message}
-
-Assistant Response:"""
+            prompt = self._build_prompt(user_message, context)
             
             # Generate response
             response = self.model.generate_content(prompt)
@@ -65,6 +50,57 @@ Assistant Response:"""
         except Exception as e:
             logger.error(f"❌ Error generating Gemini response: {str(e)}")
             raise Exception(f"Gemini generation failed: {str(e)}")
+
+    async def generate_response_stream(
+        self,
+        user_message: str,
+        context: Optional[List[str]] = None
+    ):
+        """
+        Generate streaming response using Gemini
+        
+        Args:
+            user_message: User's input message
+            context: List of relevant context strings from RAG
+            
+        Yields:
+            Chunks of generated text
+        """
+        try:
+            # Build prompt with context
+            prompt = self._build_prompt(user_message, context)
+            
+            # Generate streaming response
+            response = self.model.generate_content(prompt, stream=True)
+            
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+            
+            logger.info("✅ Generated streaming response")
+            
+        except Exception as e:
+            logger.error(f"❌ Error generating Gemini streaming response: {str(e)}")
+            raise Exception(f"Gemini streaming failed: {str(e)}")
+
+    def _build_prompt(self, user_message: str, context: Optional[List[str]] = None) -> str:
+        """Helper to build the prompt with context"""
+        if context and len(context) > 0:
+            context_text = "\n\n".join([f"Context {i+1}:\n{ctx}" for i, ctx in enumerate(context)])
+            return f"""You are Guardian AI, a helpful medical assistant. Use the following context to answer the user's question accurately. If the context doesn't contain relevant information, provide a general helpful response.
+
+Context:
+{context_text}
+
+User Question: {user_message}
+
+Assistant Response:"""
+        else:
+            return f"""You are Guardian AI, a helpful medical assistant. Provide a clear and accurate response to the user's question.
+
+User Question: {user_message}
+
+Assistant Response:"""
     
     async def generate_title(self, message: str) -> str:
         """

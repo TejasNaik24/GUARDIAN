@@ -94,3 +94,101 @@ async def chat(
     except Exception as e:
         logger.error(f"❌ Error in chat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    request: ChatRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Stream chat response with RAG enhancement
+    
+    Returns:
+        Server-Sent Events (SSE) stream
+    """
+    from fastapi.responses import StreamingResponse
+    import json
+    import asyncio
+
+    async def event_generator():
+        try:
+            user_id = current_user.id
+            conversation_service = ConversationService()
+            rag_service = RAGService()
+            gemini_service = GeminiService()
+            
+            # 1. Get or create conversation
+            if request.conversation_id:
+                conversation = await conversation_service.get_conversation(request.conversation_id)
+                if not conversation or conversation.user_id != user_id:
+                    yield f"data: {json.dumps({'error': 'Conversation not found'})}\n\n"
+                    return
+            else:
+                conversation = await conversation_service.create_conversation(
+                    user_id=user_id,
+                    title="New Chat"
+                )
+            
+            # Send conversation ID immediately
+            yield f"data: {json.dumps({'conversation_id': conversation.id})}\n\n"
+            
+            # 2. Save user message
+            await conversation_service.save_message(
+                conversation_id=conversation.id,
+                role="user",
+                content=request.message
+            )
+            
+            # 3. Retrieve RAG context
+            logger.info(f"🔍 Retrieving context for: {request.message[:50]}...")
+            context_docs = await rag_service.search_similar(request.message)
+            context_texts = [doc["content"] for doc in context_docs]
+            
+            # Send status update
+            logger.info("📊 Sending status event: generating")
+            yield f"data: {json.dumps({'status': 'generating'})}\n\n"
+            
+            # 4. Generate streaming response
+            logger.info("🤖 Generating streaming response...")
+            full_response = ""
+            
+            async for chunk in gemini_service.generate_response_stream(
+                user_message=request.message,
+                context=context_texts
+            ):
+                full_response += chunk
+                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                # Small delay to ensure chunks are sent distinctly if needed, 
+                # but usually not necessary with async generators
+                # await asyncio.sleep(0.01)
+            
+            # 5. Save assistant message
+            await conversation_service.save_message(
+                conversation_id=conversation.id,
+                role="assistant",
+                content=full_response
+            )
+            
+            # 6. Auto-generate title if first message
+            if not request.conversation_id:
+                title = await conversation_service.generate_title(request.message)
+                await conversation_service.update_conversation_title(conversation.id, title)
+            
+            # 7. Send sources and completion
+            sources = [{"content": doc["content"][:200], "similarity": doc.get("similarity", 0)} 
+                      for doc in context_docs[:3]]
+            
+            yield f"data: {json.dumps({'sources': sources})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+            
+            logger.info(f"✅ Stream completed for conversation: {conversation.id}")
+            
+        except Exception as e:
+            logger.error(f"❌ Error in stream endpoint: {str(e)}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream"
+    )
