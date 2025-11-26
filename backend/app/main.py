@@ -1,7 +1,7 @@
 """Main FastAPI application entry point"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import health, chat, ingest
+from app.routes import health, chat, ingest, vision
 from app.utils.logger import setup_logger
 from app.config import get_settings
 
@@ -29,6 +29,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
 app.include_router(ingest.router, prefix="/api", tags=["Ingest"])
+app.include_router(vision.router, prefix="/api", tags=["Vision"])
 
 
 @app.on_event("startup")

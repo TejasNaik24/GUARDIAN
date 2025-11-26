@@ -248,4 +248,55 @@ export async function checkDatabaseHealth(token: string): Promise<boolean> {
   }
 }
 
+/**
+ * Vision analysis response interface
+ */
+export interface VisionResponse {
+  status: string;
+  conversation_id: string;
+  image_preview_url: string;
+  vision_summary: string;
+  rag_context_used: boolean;
+  final_answer: string;
+  sources?: Array<{
+    content: string;
+    similarity: number;
+  }>;
+}
+
+/**
+ * Analyze medical image using Gemini Vision + RAG
+ */
+export async function analyzeImageWithVision(
+  file: File,
+  token: string,
+  message?: string,
+  conversationId?: string
+): Promise<VisionResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (message) {
+    formData.append("message", message);
+  }
+  if (conversationId) {
+    formData.append("conversation_id", conversationId);
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/vision/analyze`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      // Don't set Content-Type - browser will set it with boundary for multipart
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to analyze image");
+  }
+
+  return response.json();
+}
+
 export type { ChatResponse, IngestResponse, ChatRequest };

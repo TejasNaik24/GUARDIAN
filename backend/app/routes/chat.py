@@ -57,19 +57,30 @@ async def chat(
             content=request.message
         )
         
-        # 3. Retrieve RAG context
+        # 3. Get conversation history
+        logger.info(f"📝 Retrieving conversation history for: {conversation.id}")
+        messages = await conversation_service.get_conversation_messages(conversation.id)
+        # Convert to dict format for Gemini (exclude the just-saved user message)
+        conversation_history = [
+            {"role": msg.role, "content": msg.content}
+            for msg in messages[:-1]  # Exclude last message (current user message)
+        ]
+        logger.info(f"📚 Retrieved {len(conversation_history)} previous messages")
+        
+        # 4. Retrieve RAG context
         logger.info(f"🔍 Retrieving context for: {request.message[:50]}...")
         context_docs = await rag_service.search_similar(request.message)
         context_texts = [doc["content"] for doc in context_docs]
         
-        # 4. Generate response with Gemini
+        # 5. Generate response with Gemini
         logger.info("🤖 Generating response with Gemini...")
         response_text = await gemini_service.generate_response(
             user_message=request.message,
-            context=context_texts
+            context=context_texts,
+            conversation_history=conversation_history
         )
         
-        # 5. Save assistant message
+        # 6. Save assistant message
         await conversation_service.save_message(
             conversation_id=conversation.id,
             role="assistant",
@@ -140,7 +151,17 @@ async def chat_stream(
                 content=request.message
             )
             
-            # 3. Retrieve RAG context
+            # 3. Get conversation history
+            logger.info(f"📝 Retrieving conversation history for: {conversation.id}")
+            messages = await conversation_service.get_conversation_messages(conversation.id)
+            # Convert to dict format for Gemini (exclude the just-saved user message)
+            conversation_history = [
+                {"role": msg.role, "content": msg.content}
+                for msg in messages[:-1]  # Exclude last message (current user message)
+            ]
+            logger.info(f"📚 Retrieved {len(conversation_history)} previous messages")
+            
+            # 4. Retrieve RAG context
             logger.info(f"🔍 Retrieving context for: {request.message[:50]}...")
             context_docs = await rag_service.search_similar(request.message)
             context_texts = [doc["content"] for doc in context_docs]
@@ -149,13 +170,14 @@ async def chat_stream(
             logger.info("📊 Sending status event: generating")
             yield f"data: {json.dumps({'status': 'generating'})}\n\n"
             
-            # 4. Generate streaming response
+            # 5. Generate streaming response
             logger.info("🤖 Generating streaming response...")
             full_response = ""
             
             async for chunk in gemini_service.generate_response_stream(
                 user_message=request.message,
-                context=context_texts
+                context=context_texts,
+                conversation_history=conversation_history
             ):
                 full_response += chunk
                 yield f"data: {json.dumps({'chunk': chunk})}\n\n"

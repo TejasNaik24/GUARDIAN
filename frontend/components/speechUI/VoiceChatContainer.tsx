@@ -26,7 +26,7 @@ interface Message {
 type ConversationState = "idle" | "listening" | "thinking" | "speaking";
 
 export default function VoiceChatContainer() {
-  const { isGuest } = useAuth();
+  const { isGuest, session } = useAuth();
   const { chat } = useGuardianRAG();
   const { messages: contextMessages, currentConversation } = useConversation();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -36,6 +36,8 @@ export default function VoiceChatContainer() {
   const [isVoiceMode, setIsVoiceMode] = useState(true);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [voiceUploadedFiles, setVoiceUploadedFiles] = useState<File[]>([]);
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const [conversationState, setConversationState] =
     useState<ConversationState>("idle");
   const [showTranscript, setShowTranscript] = useState(false);
@@ -314,6 +316,19 @@ export default function VoiceChatContainer() {
     if (!text.trim() && !media) return;
 
     console.log("📝 [VoiceChatContainer] Text mode sending:", text);
+    console.log("📁 [VoiceChatContainer] Media:", media);
+
+    // Check if media is an image
+    const imageTypes = ["image/jpeg", "image/jpg", "image/png", "image/heic", "image/webp"];
+    const isImage = media && imageTypes.includes(media.type);
+    console.log("🖼️ [VoiceChatContainer] Is image?", isImage);
+
+    if (isImage && media) {
+      // Handle image with vision API
+      console.log("✅ [VoiceChatContainer] Calling handleImageAnalysis");
+      await handleImageAnalysis(media, text.trim() || undefined);
+      return;
+    }
 
     // Create media URL if file is present
     const mediaUrl = media ? URL.createObjectURL(media) : undefined;
@@ -398,6 +413,7 @@ export default function VoiceChatContainer() {
     );
     setConversationState("idle");
 
+
     if (response) {
       // Store conversation_id from response
       if (response.conversation_id && !currentConversationId) {
@@ -432,34 +448,45 @@ export default function VoiceChatContainer() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    console.log("🔍 [handleFileUpload] Files:", files);
+    console.log("🎙️ [handleFileUpload] VOICE MODE HANDLER CALLED!");
+    if (!files || files.length === 0) return;
 
-    const validTypes = [
-      "image/jpeg",
-      "image/jpg",
-      "image/png",
-      "video/mp4",
-      "audio/mpeg",
-      "audio/mp3",
-      "audio/wav",
-    ];
-    const newFiles: File[] = [];
+    const file = files[0]; // Take first file only
+    console.log("📁 [handleFileUpload] File type:", file.type, "Name:", file.name);
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    // Check if it's an image
+    const imageTypes = ["image/jpeg", "image/jpg", "image/png", "image/heic", "image/webp"];
+    const isImage = imageTypes.includes(file.type);
+    console.log("🖼️ [handleFileUpload] Is image?", isImage);
+
+    if (isImage) {
+      // For images: switch to text mode and add to pending images
+      console.log("✅ [handleFileUpload] Image detected - switching to text mode");
+
+      // Switch to text mode and set pending images
+      if (isVoiceMode) {
+        setIsVoiceMode(false);
+      }
+      setPendingImages([file]);
+    } else {
+      // Handle audio/video for voice mode
+      const validTypes = [
+        "video/mp4",
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/wav",
+      ];
+
       if (validTypes.includes(file.type)) {
-        newFiles.push(file);
+        const remainingSlots = 4 - voiceUploadedFiles.length;
+        if (remainingSlots > 0) {
+          setVoiceUploadedFiles([...voiceUploadedFiles, file]);
+        }
       }
     }
-
-    // Add files up to the limit of 4
-    const remainingSlots = 4 - voiceUploadedFiles.length;
-    setVoiceUploadedFiles([
-      ...voiceUploadedFiles,
-      ...newFiles.slice(0, remainingSlots),
-    ]);
 
     // Reset input
     if (fileInputRef.current) {
@@ -467,9 +494,180 @@ export default function VoiceChatContainer() {
     }
   };
 
+  const handleImageAnalysis = async (file: File, userMessage?: string) => {
+    console.log("🚀 [handleImageAnalysis] Starting image analysis for:", file.name);
+    console.log("💬 [handleImageAnalysis] User message:", userMessage || "(none)");
+    try {
+      // Add user message with image preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageUrl = e.target?.result as string;
+        const userImageMessage: Message = {
+          id: Date.now().toString(),
+          text: userMessage || "What can you tell me about this image?",
+          isUser: true,
+          timestamp: new Date().toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+          mediaUrl: imageUrl,
+          mediaType: "image",
+        };
+        setMessages((prev) => [...prev, userImageMessage]);
+      };
+      reader.readAsDataURL(file);
+
+      // Set thinking state
+      setConversationState("thinking");
+
+      // Get token
+      const token = session?.access_token;
+      if (!token) {
+        throw new Error("Not authenticated");
+      }
+
+      // Call vision API
+      const { analyzeImageWithVision } = await import("@/lib/guardianApi");
+      const response = await analyzeImageWithVision(file, token, userMessage, currentConversationId);
+
+      // Store conversation ID if returned
+      if (response.conversation_id && !currentConversationId) {
+        console.log("📝 Storing conversation ID from vision response:", response.conversation_id);
+        setCurrentConversationId(response.conversation_id);
+      }
+
+      // Add assistant response with typing effect
+      const assistantMessageId = (Date.now() + 1).toString();
+      const fullText = response.final_answer;
+
+      // Create initial empty message
+      const assistantMessage: Message = {
+        id: assistantMessageId,
+        text: "",
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+      setConversationState("idle"); // Remove "Analyzing..." immediately
+
+      // Type out the response character by character
+      let currentIndex = 0;
+      const typingInterval = setInterval(() => {
+        if (currentIndex < fullText.length) {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, text: fullText.substring(0, currentIndex + 1) }
+                : msg
+            )
+          );
+          currentIndex++;
+        } else {
+          clearInterval(typingInterval);
+
+          // Speak response if voice mode and not muted (after typing completes)
+          if (isVoiceMode && !isMuted) {
+            speak(fullText);
+          }
+        }
+      }, 10); // 10ms per character for faster typing
+
+    } catch (error) {
+      console.error("Error analyzing image:", error);
+      const errorMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        text: `Sorry, I couldn't analyze the image: ${error instanceof Error ? error.message : "Unknown error"}`,
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setConversationState("idle");
+    }
+  };
+
   const handleRemoveVoiceFile = (index: number) => {
     setVoiceUploadedFiles(voiceUploadedFiles.filter((_, i) => i !== index));
   };
+
+  // Drag and drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set to false if we're leaving the main container
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    const file = files[0]; // Take first file
+    console.log("📁 [Drag&Drop] File dropped:", file.type, file.name);
+
+    // Check if it's an image
+    const imageTypes = ["image/jpeg", "image/jpg", "image/png", "image/heic", "image/webp"];
+    const isImage = imageTypes.includes(file.type);
+
+    if (isImage) {
+      // For images: switch to text mode and add to pending images
+      console.log("✅ [Drag&Drop] Image detected - switching to text mode");
+      if (isVoiceMode) {
+        setIsVoiceMode(false);
+      }
+      setPendingImages([file]);
+    } else if (file.type === "application/pdf") {
+      // For PDFs, you might want to handle differently in the future
+      console.log("📄 [Drag&Drop] PDF detected");
+      // For now, just show a message
+      const message: Message = {
+        id: Date.now().toString(),
+        text: "PDF upload coming soon! For now, please use the upload button for documents.",
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, message]);
+    } else {
+      // Unsupported file type
+      const message: Message = {
+        id: Date.now().toString(),
+        text: `Sorry, ${file.type || "this file type"} is not supported yet. Please upload images (JPG, PNG) for vision analysis.`,
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, message]);
+    }
+  };
+
 
   const handleSendVoiceFiles = () => {
     if (voiceUploadedFiles.length > 0) {
@@ -485,7 +683,13 @@ export default function VoiceChatContainer() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#F9FAFB]">
+    <div
+      className="flex flex-col h-screen bg-[#F9FAFB]"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       {/* Header */}
       <header className="bg-white border-b border-[#E5E7EB] px-4 md:px-6 py-4 shadow-sm">
         <div className="w-full flex items-center justify-between">
@@ -657,6 +861,8 @@ export default function VoiceChatContainer() {
                       onSendMessage={handleTextSendMessage}
                       disabled={isChatLoading}
                       currentTranscript={transcript}
+                      pendingImages={displayMessages.length === 0 ? pendingImages : []}
+                      onPendingImagesChange={displayMessages.length === 0 ? setPendingImages : undefined}
                     />
                   </div>
                 </div>
@@ -1016,6 +1222,8 @@ export default function VoiceChatContainer() {
               onSendMessage={handleTextSendMessage}
               disabled={isChatLoading}
               currentTranscript={transcript}
+              pendingImages={displayMessages.length > 0 ? pendingImages : []}
+              onPendingImagesChange={displayMessages.length > 0 ? setPendingImages : undefined}
             />
           )}
         </div>
@@ -1103,6 +1311,52 @@ export default function VoiceChatContainer() {
                   />
                 </svg>
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Drag and Drop Overlay */}
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="bg-white rounded-3xl p-12 shadow-2xl border-4 border-dashed border-[#3B82F6] max-w-md mx-4"
+            >
+              <div className="text-center">
+                <div className="mb-4 inline-block p-4 bg-[#EFF6FF] rounded-2xl">
+                  <svg
+                    className="w-16 h-16 text-[#3B82F6]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold text-[#1E3A8A] mb-2">
+                  Drop your file here
+                </h3>
+                <p className="text-[#64748B] text-sm">
+                  Supports images (JPG, PNG) for vision analysis
+                </p>
+                <p className="text-[#94A3B8] text-xs mt-2">
+                  PDFs and other formats coming soon
+                </p>
+              </div>
             </motion.div>
           </motion.div>
         )}

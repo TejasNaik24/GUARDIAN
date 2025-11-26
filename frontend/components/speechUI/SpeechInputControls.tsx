@@ -14,6 +14,8 @@ interface SpeechInputControlsProps {
   onSendMessage: (text: string, media?: File) => void;
   disabled?: boolean;
   currentTranscript?: string;
+  pendingImages?: File[];
+  onPendingImagesChange?: (files: File[]) => void;
 }
 
 const MAX_FILES = 4;
@@ -26,12 +28,19 @@ export default function SpeechInputControls({
   onSendMessage,
   disabled = false,
   currentTranscript = "",
+  pendingImages = [],
+  onPendingImagesChange,
 }: SpeechInputControlsProps) {
   const [textInput, setTextInput] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isDictating, setIsDictating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Debug: Log uploadedFiles changes
+  useEffect(() => {
+    console.log("📊 [SpeechInputControls] uploadedFiles changed:", uploadedFiles.length, uploadedFiles.map(f => f.name));
+  }, [uploadedFiles]);
 
   // Separate speech recognition hook for dictation in text mode
   const {
@@ -57,6 +66,21 @@ export default function SpeechInputControls({
     }
   }, [dictationTranscript, isDictating]);
 
+  // Apply pending images from parent when in text mode
+  useEffect(() => {
+    // Only apply if we don't already have uploaded files and there are pending images
+    if (!isVoiceMode && pendingImages.length > 0 && uploadedFiles.length === 0) {
+      console.log("📥 [SpeechInputControls] Applying pending images:", pendingImages.length);
+      setUploadedFiles(pendingImages);
+      // Clear pending images after applying
+      onPendingImagesChange?.([]);
+      // Focus the text input so user can type
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 100);
+    }
+  }, [pendingImages, isVoiceMode, onPendingImagesChange, uploadedFiles.length]);
+
   // Handle dictation toggle
   const handleDictationToggle = () => {
     if (isDictating) {
@@ -70,30 +94,33 @@ export default function SpeechInputControls({
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
+    console.log("🔍 [SpeechInputControls] Files selected:", files);
     if (!files) return;
 
-    const validTypes = [
-      "image/jpeg",
-      "image/jpg",
-      "image/png",
-      "video/mp4",
-      "audio/mpeg",
-      "audio/mp3",
-      "audio/wav",
-    ];
-    const newFiles: File[] = [];
+    const imageTypes = ["image/jpeg", "image/jpg", "image/png", "image/heic", "image/webp"];
+    const audioVideoTypes = ["video/mp4", "audio/mpeg", "audio/mp3", "audio/wav"];
 
-    // Validate each file
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (validTypes.includes(file.type)) {
-        newFiles.push(file);
+    const file = files[0]; // Take first file
+    console.log("📁 [SpeechInputControls] File type:", file.type, "Name:", file.name);
+
+    const isImage = imageTypes.includes(file.type);
+    console.log("🖼️ [SpeechInputControls] Is image?", isImage);
+
+    if (isImage) {
+      // For images, add to uploadedFiles so user can type a message
+      console.log("✅ [SpeechInputControls] Image added to preview, waiting for user message");
+      setUploadedFiles([file]);
+      // Focus the text input so user can type
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 100);
+    } else if (audioVideoTypes.includes(file.type)) {
+      // Audio/video files can be previewed and attached
+      const remainingSlots = MAX_FILES - uploadedFiles.length;
+      if (remainingSlots > 0) {
+        setUploadedFiles([...uploadedFiles, file]);
       }
     }
-
-    // Add files up to the limit
-    const remainingSlots = MAX_FILES - uploadedFiles.length;
-    setUploadedFiles([...uploadedFiles, ...newFiles.slice(0, remainingSlots)]);
 
     // Reset input
     if (fileInputRef.current) {
@@ -102,15 +129,29 @@ export default function SpeechInputControls({
   };
 
   const handleRemoveFile = (index: number) => {
+    console.log("🗑️ [SpeechInputControls] Removing file at index:", index);
     setUploadedFiles(uploadedFiles.filter((_, i) => i !== index));
   };
 
   const handleSend = () => {
+    // Check if it's an image file
+    const hasImage = uploadedFiles.length > 0 &&
+      uploadedFiles[0].type.startsWith("image/");
+
+    // For images, require text input
+    if (hasImage && !textInput.trim()) {
+      // Don't send - user needs to type a message for the image
+      return;
+    }
+
     if (textInput.trim() || uploadedFiles.length > 0) {
+      console.log("🚀 [SpeechInputControls] Sending message with files:", uploadedFiles.length);
       // For now, send with first file (backend will be updated later for multiple)
       onSendMessage(textInput.trim(), uploadedFiles[0] || undefined);
+      console.log("🧹 [SpeechInputControls] Clearing text and uploaded files");
       setTextInput("");
       setUploadedFiles([]);
+      console.log("✅ [SpeechInputControls] State cleared");
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -142,7 +183,7 @@ export default function SpeechInputControls({
           <div className="mb-3 flex flex-nowrap gap-2 justify-start overflow-x-auto">
             {uploadedFiles.map((file, index) => (
               <MediaPreview
-                key={index}
+                key={`${file.name}-${file.size}-${index}`}
                 file={file}
                 fileCount={uploadedFiles.length}
                 onRemove={() => handleRemoveFile(index)}
@@ -183,11 +224,10 @@ export default function SpeechInputControls({
                     fileInputRef.current?.click()
                   }
                   disabled={uploadedFiles.length >= MAX_FILES}
-                  className={`p-3 rounded-xl transition-colors shadow-sm ${
-                    uploadedFiles.length >= MAX_FILES
-                      ? "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
-                      : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] cursor-pointer"
-                  }`}
+                  className={`p-3 rounded-xl transition-colors shadow-sm ${uploadedFiles.length >= MAX_FILES
+                    ? "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
+                    : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] cursor-pointer"
+                    }`}
                   aria-label="Upload media"
                 >
                   <svg
@@ -277,11 +317,10 @@ export default function SpeechInputControls({
                   fileInputRef.current?.click()
                 }
                 disabled={uploadedFiles.length >= MAX_FILES}
-                className={`p-2 rounded-lg transition-colors ${
-                  uploadedFiles.length >= MAX_FILES
-                    ? "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
-                    : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] cursor-pointer"
-                }`}
+                className={`p-2 rounded-lg transition-colors ${uploadedFiles.length >= MAX_FILES
+                  ? "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
+                  : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0] cursor-pointer"
+                  }`}
                 aria-label="Upload media"
               >
                 <svg
@@ -314,12 +353,15 @@ export default function SpeechInputControls({
               onKeyDown={handleKeyDown}
               disabled={disabled || isDictating}
               placeholder={
-                isDictating ? "Listening..." : "Type your message..."
+                uploadedFiles.length > 0 && uploadedFiles[0].type.startsWith("image/")
+                  ? "Ask a question about this image..."
+                  : isDictating
+                    ? "Listening..."
+                    : "Type your message..."
               }
               rows={1}
-              className={`flex-1 resize-none bg-transparent text-[#1E3A8A] placeholder:text-[#94A3B8] focus:outline-none text-sm md:text-base max-h-32 overflow-y-auto ${
-                isDictating ? "opacity-50 cursor-not-allowed" : ""
-              }`}
+              className={`flex-1 resize-none bg-transparent text-[#1E3A8A] placeholder:text-[#94A3B8] focus:outline-none text-sm md:text-base max-h-32 overflow-y-auto ${isDictating ? "opacity-50 cursor-not-allowed" : ""
+                }`}
               style={{ minHeight: "24px" }}
             />
 
@@ -329,13 +371,11 @@ export default function SpeechInputControls({
               whileTap={{ scale: 0.95 }}
               onClick={handleDictationToggle}
               disabled={disabled}
-              className={`shrink-0 p-2 rounded-lg transition-all relative ${
-                isDictating
-                  ? "bg-[#EF4444] text-white shadow-md"
-                  : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0]"
-              } ${
-                disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-              }`}
+              className={`shrink-0 p-2 rounded-lg transition-all relative ${isDictating
+                ? "bg-[#EF4444] text-white shadow-md"
+                : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0]"
+                } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                }`}
               aria-label={isDictating ? "Stop dictation" : "Start dictation"}
             >
               {/* Pulsing ring when dictating */}
@@ -380,11 +420,10 @@ export default function SpeechInputControls({
               disabled={
                 disabled || (!textInput.trim() && uploadedFiles.length === 0)
               }
-              className={`shrink-0 p-2 rounded-lg transition-all ${
-                (textInput.trim() || uploadedFiles.length > 0) && !disabled
-                  ? "bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] text-white shadow-md hover:shadow-lg cursor-pointer"
-                  : "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
-              }`}
+              className={`shrink-0 p-2 rounded-lg transition-all ${(textInput.trim() || uploadedFiles.length > 0) && !disabled
+                ? "bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] text-white shadow-md hover:shadow-lg cursor-pointer"
+                : "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
+                }`}
             >
               <svg
                 className="w-4 h-4"
