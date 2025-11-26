@@ -102,33 +102,7 @@ export default function ChatContainer() {
     <div className="flex flex-col h-screen bg-[#F9FAFB]">
       {/* Header */}
       <header className="bg-white border-b border-[#E5E7EB] px-4 md:px-6 py-4 shadow-sm">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] rounded-xl flex items-center justify-center shadow-md">
-                <svg
-                  className="w-6 h-6 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-[#1E3A8A]">
-                  Guardian AI
-                </h1>
-                <p className="text-xs text-[#64748B]">Medical Assistant</p>
-              </div>
-            </div>
-          </div>
-
+        <div className="max-w-5xl mx-auto flex items-center justify-end">
           {/* Mode Toggle */}
           <ToggleSwitch
             isVoiceMode={isVoiceMode}

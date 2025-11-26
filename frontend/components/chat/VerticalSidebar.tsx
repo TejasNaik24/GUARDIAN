@@ -40,10 +40,10 @@ export function VerticalSidebar({
     >
       {/* Guardian Logo at Top */}
       <div className="mb-6 px-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm border border-gray-200 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <div className="w-10 h-10 bg-[#3B82F6] rounded-lg flex items-center justify-center shrink-0">
             <svg
-              className="w-6 h-6 text-blue-600"
+              className="w-6 h-6 text-white"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -211,7 +211,7 @@ export function VerticalSidebar({
       {/* User Profile Icon at Bottom */}
       <div className="mt-auto pt-4 border-t border-gray-200">
         <div
-          className={`flex items-center ${isExpanded ? "px-3 justify-start" : "pl-2 justify-start"
+          className={`flex items-center ${isExpanded ? "px-3 justify-start" : "pl-2 pr-3 justify-center"
             }`}
         >
           <UserProfileMenu isExpanded={isExpanded} />

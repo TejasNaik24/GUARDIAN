@@ -90,14 +90,13 @@ export default function UserProfileMenu({
   return (
     <div
       ref={menuRef}
-      className={isExpanded ? "w-full" : "fixed bottom-4 left-4 z-50"}
+      className="relative w-full"
     >
       {/* Profile Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`bg-white hover:bg-gray-50 rounded-xl shadow-lg transition-colors border border-gray-200 cursor-pointer ${
-          isExpanded ? "w-full p-2 flex items-center gap-3" : "p-2"
-        }`}
+        className={`bg-white hover:bg-gray-50 rounded-xl shadow-lg transition-colors border border-gray-200 cursor-pointer ${isExpanded ? "w-full p-2 flex items-center gap-3" : "p-2"
+          }`}
       >
         {/* Avatar */}
         {renderAvatar()}
