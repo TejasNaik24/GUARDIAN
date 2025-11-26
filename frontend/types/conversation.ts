@@ -48,4 +48,5 @@ export interface ConversationContextType {
 
   // Utility
   clearCurrentConversation: () => void;
+  clearAllConversations: () => void;
 }

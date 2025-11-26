@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConversation } from "@/contexts/ConversationContext";
+import ConfirmationModal from "@/components/common/ConfirmationModal";
 
 interface UserProfileMenuProps {
   isExpanded?: boolean;
@@ -12,7 +14,12 @@ export default function UserProfileMenu({
   isExpanded = false,
 }: UserProfileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [showDeleteHistoryModal, setShowDeleteHistoryModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [showEmailSentModal, setShowEmailSentModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { user, isGuest, signOut } = useAuth();
+  const { clearAllConversations } = useConversation();
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -36,6 +43,62 @@ export default function UserProfileMenu({
   const handleLogout = async () => {
     await signOut();
     router.push("/");
+  };
+
+  const handleDeleteHistory = async () => {
+    setIsDeleting(true);
+    try {
+      // Call backend to delete all conversations
+      const { supabase } = await import("@/lib/supabaseClient");
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/chat/conversations/all`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (response.ok) {
+          // Clear local state
+          clearAllConversations();
+          setShowDeleteHistoryModal(false);
+          setIsOpen(false);
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting conversation history:", error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      // Call backend to send verification email
+      const { supabase } = await import("@/lib/supabaseClient");
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/account/delete/initiate`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (response.ok) {
+          setShowDeleteAccountModal(false);
+          setShowEmailSentModal(true);
+        }
+      }
+    } catch (error) {
+      console.error("Error initiating account deletion:", error);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getDisplayName = () => {
@@ -156,28 +219,52 @@ export default function UserProfileMenu({
                 Create Account
               </button>
             ) : (
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  router.push("/profile");
-                }}
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 cursor-pointer"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+              <>
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    setShowDeleteHistoryModal(true);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 cursor-pointer"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                  />
-                </svg>
-                Profile Settings
-              </button>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                  Delete all conversation history
+                </button>
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    setShowDeleteAccountModal(true);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 cursor-pointer"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                  Delete account
+                </button>
+              </>
             )}
 
             <button
@@ -202,6 +289,47 @@ export default function UserProfileMenu({
           </div>
         </div>
       )}
+
+      {/* Delete History Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteHistoryModal}
+        onClose={() => setShowDeleteHistoryModal(false)}
+        onConfirm={handleDeleteHistory}
+        title="Delete all conversation history?"
+        message="This will permanently delete all your conversations. This action cannot be undone."
+        confirmText="Delete All"
+        isDestructive={true}
+        isLoading={isDeleting}
+      />
+
+      {/* Delete Account Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteAccountModal}
+        onClose={() => setShowDeleteAccountModal(false)}
+        onConfirm={handleDeleteAccount}
+        title="Delete your account?"
+        message="This will permanently delete your account and all associated data. This action cannot be undone."
+        confirmText="Delete Account"
+        isDestructive={true}
+        isLoading={isDeleting}
+      />
+
+      {/* Email Sent Modal */}
+      <ConfirmationModal
+        isOpen={showEmailSentModal}
+        onClose={() => {
+          setShowEmailSentModal(false);
+          setIsOpen(false);
+        }}
+        onConfirm={() => {
+          setShowEmailSentModal(false);
+          setIsOpen(false);
+        }}
+        title="Email sent!"
+        message="Please check your email and follow the instructions to complete account deletion."
+        confirmText="OK"
+        isDestructive={false}
+      />
     </div>
   );
 }

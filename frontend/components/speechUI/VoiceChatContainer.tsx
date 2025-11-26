@@ -830,7 +830,7 @@ export default function VoiceChatContainer() {
               {displayMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
                   <h3 className="text-2xl font-semibold text-[#1E3A8A] mb-8">
-                    How can I help you today?
+                    How can I assist you today?
                   </h3>
 
                   {/* Centered input box for empty state */}

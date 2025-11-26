@@ -214,3 +214,32 @@ async def chat_stream(
         event_generator(),
         media_type="text/event-stream"
     )
+
+
+@router.delete("/chat/conversations/all")
+async def delete_all_conversations(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Delete all conversations for the current user
+    
+    Args:
+        current_user: Authenticated user from JWT
+        
+    Returns:
+        Success message
+    """
+    try:
+        user_id = current_user.id
+        conversation_service = ConversationService()
+        
+        # Delete all conversations for this user
+        # Messages will be cascade deleted due to foreign key constraint
+        conversation_service.supabase.table("conversations").delete().eq("user_id", user_id).execute()
+        
+        logger.info(f"✅ Deleted all conversations for user: {user_id}")
+        return {"status": "success", "message": "All conversations deleted"}
+        
+    except Exception as e:
+        logger.error(f"❌ Error deleting all conversations: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -283,6 +283,13 @@ export function ConversationProvider({
     setMessages([]);
   }, []);
 
+  // Clear all conversations (for delete all history)
+  const clearAllConversations = useCallback(() => {
+    setConversations([]);
+    setCurrentConversation(null);
+    setMessages([]);
+  }, []);
+
   // Load conversations when user logs in
   useEffect(() => {
     if (user) {
@@ -308,6 +315,7 @@ export function ConversationProvider({
     loadMessages,
     addMessage,
     clearCurrentConversation,
+    clearAllConversations,
   };
 
   return (

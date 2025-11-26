@@ -56,16 +56,7 @@ export function VerticalSidebar({
               />
             </svg>
           </div>
-          {isExpanded && (
-            <motion.span
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
-              className="font-semibold text-gray-900 text-sm"
-            >
-              Guardian
-            </motion.span>
-          )}
+          {/* Text removed as requested */}
         </div>
       </div>
 
