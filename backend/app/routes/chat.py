@@ -243,3 +243,113 @@ async def delete_all_conversations(
     except Exception as e:
         logger.error(f"❌ Error deleting all conversations: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# GUEST MODE ENDPOINTS (No Authentication Required)
+# ============================================================================
+
+@router.post("/chat/guest", response_model=ChatResponse)
+async def chat_guest(request: ChatRequest):
+    """
+    Process chat message for guest users (no authentication required)
+    
+    Note: Guest conversations are not saved to database
+    
+    Args:
+        request: Chat request with message
+        
+    Returns:
+        Chat response with assistant message and sources
+    """
+    try:
+        rag_service = RAGService()
+        gemini_service = GeminiService()
+        
+        # 1. Retrieve RAG context
+        logger.info(f"🔍 [Guest] Retrieving context for: {request.message[:50]}...")
+        context_docs = await rag_service.search_similar(request.message)
+        context_texts = [doc["content"] for doc in context_docs]
+        
+        # 2. Generate response with Gemini (no conversation history for guests)
+        logger.info("🤖 [Guest] Generating response with Gemini...")
+        response_text = await gemini_service.generate_response(
+            user_message=request.message,
+            context=context_texts,
+            conversation_history=None
+        )
+        
+        logger.info("✅ [Guest] Chat response generated")
+        
+        return ChatResponse(
+            conversation_id="guest",  # Special ID for guest mode
+            message=response_text,
+            role="assistant",
+            sources=[{"content": doc["content"][:200], "similarity": doc.get("similarity", 0)} 
+                    for doc in context_docs[:3]]
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error in guest chat endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+
+@router.post("/chat/guest/stream")
+async def chat_guest_stream(request: ChatRequest):
+    """
+    Stream chat response for guest users (no authentication required)
+    
+    Note: Guest conversations are not saved to database
+    
+    Returns:
+        Server-Sent Events (SSE) stream
+    """
+    from fastapi.responses import StreamingResponse
+    import json
+
+    async def event_generator():
+        try:
+            rag_service = RAGService()
+            gemini_service = GeminiService()
+            
+            # Send guest conversation ID immediately
+            yield f"data: {json.dumps({'conversation_id': 'guest'})}\n\n"
+            
+            # 1. Retrieve RAG context
+            logger.info(f"🔍 [Guest] Retrieving context for: {request.message[:50]}...")
+            context_docs = await rag_service.search_similar(request.message)
+            context_texts = [doc["content"] for doc in context_docs]
+            
+            # Send status update
+            logger.info("📊 [Guest] Sending status event: generating")
+            yield f"data: {json.dumps({'status': 'generating'})}\n\n"
+            
+            # 2. Generate streaming response (no conversation history for guests)
+            logger.info("🤖 [Guest] Generating streaming response...")
+            full_response = ""
+            
+            async for chunk in gemini_service.generate_response_stream(
+                user_message=request.message,
+                context=context_texts,
+                conversation_history=None
+            ):
+                full_response += chunk
+                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            
+            # 3. Send sources and completion
+            sources = [{"content": doc["content"][:200], "similarity": doc.get("similarity", 0)} 
+                      for doc in context_docs[:3]]
+            
+            yield f"data: {json.dumps({'sources': sources})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+            
+            logger.info("✅ [Guest] Stream completed")
+            
+        except Exception as e:
+            logger.error(f"❌ Error in guest stream endpoint: {str(e)}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream"
+    )

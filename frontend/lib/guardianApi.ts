@@ -170,6 +170,118 @@ export async function sendChatMessageStream(
 }
 
 /**
+ * Send chat message for guest users (no authentication)
+ */
+export async function sendChatMessageGuest(
+  message: string
+): Promise<ChatResponse> {
+  console.log("🟢 [guardianApi] Sending guest chat message...");
+
+  const response = await fetch(`${BACKEND_URL}/api/chat/guest`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message } as ChatRequest),
+  });
+
+  if (!response.ok) {
+    const error = await response
+      .json()
+      .catch(() => ({ detail: "Unknown error" }));
+    throw new Error(error.detail || `Guest chat request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log("🟢 [guardianApi] Guest response data:", data);
+  return data;
+}
+
+/**
+ * Send chat message with streaming response for guest users (no authentication)
+ */
+export async function sendChatMessageStreamGuest(
+  message: string,
+  onChunk: (chunk: string) => void,
+  onComplete: (response: ChatResponse) => void,
+  onStatus?: (status: string) => void
+): Promise<void> {
+  console.log("🟢 [guardianApi] Sending guest streaming chat message...");
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/chat/guest/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message } as ChatRequest),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Guest stream request failed: ${response.status}`);
+    }
+
+    if (!response.body) {
+      throw new Error("Response body is null");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    let fullMessage = "";
+    let sources: any[] = [];
+    let role = "assistant";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split("\n\n");
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            console.log("🔍 [guardianApi] Guest parsed SSE data:", data);
+
+            if (data.status) {
+              console.log("📊 [guardianApi] Guest status event received:", data.status);
+              if (onStatus) onStatus(data.status);
+            } else if (data.chunk) {
+              fullMessage += data.chunk;
+              onChunk(data.chunk);
+            } else if (data.sources) {
+              sources = data.sources;
+            } else if (data.error) {
+              console.error("🔴 [guardianApi] Guest stream error:", data.error);
+              throw new Error(data.error);
+            } else if (data.done) {
+              // Stream complete
+            }
+          } catch (e) {
+            console.error("Error parsing guest SSE data:", e);
+          }
+        }
+      }
+    }
+
+    // Call onComplete with full response
+    onComplete({
+      conversation_id: "guest",
+      message: fullMessage,
+      role,
+      sources
+    });
+
+  } catch (error) {
+    console.error("🔴 [guardianApi] Guest streaming error:", error);
+    throw error;
+  }
+}
+
+
+/**
  * Upload PDF file for RAG ingestion
  */
 export async function uploadPDF(

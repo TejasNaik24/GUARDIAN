@@ -56,36 +56,75 @@ export function useGuardianRAG() {
       console.log("🔵 [useGuardianRAG] User:", user);
       console.log("🔵 [useGuardianRAG] Message:", message);
 
-      const token = await getToken();
-      console.log("🔵 [useGuardianRAG] Got token:", token ? "✓" : "✗");
+      // Check if user is authenticated
+      const isGuest = !user;
 
-      if (onChunk) {
-        // Use streaming
-        return new Promise<ChatResponse | null>((resolve) => {
-          sendChatMessageStream(
-            message,
-            token,
-            conversationId,
-            onChunk,
-            (response) => {
-              console.log("🔵 [useGuardianRAG] Stream complete:", response);
+      if (isGuest) {
+        console.log("🔵 [useGuardianRAG] Guest mode - using guest endpoints");
+
+        if (onChunk) {
+          // Use guest streaming
+          const { sendChatMessageStreamGuest } = await import("@/lib/guardianApi");
+          return new Promise<ChatResponse | null>((resolve) => {
+            sendChatMessageStreamGuest(
+              message,
+              onChunk,
+              (response) => {
+                console.log("🔵 [useGuardianRAG] Guest stream complete:", response);
+                setLoading(false);
+                resolve(response);
+              },
+              onStatus
+            ).catch((err) => {
+              const errorMsg = err.message || "Failed to send message";
+              setError(errorMsg);
+              console.error("🔴 [useGuardianRAG] Guest chat error:", err);
               setLoading(false);
-              resolve(response);
-            },
-            onStatus
-          ).catch((err) => {
-            const errorMsg = err.message || "Failed to send message";
-            setError(errorMsg);
-            console.error("🔴 [useGuardianRAG] Chat error:", err);
-            setLoading(false);
-            resolve(null);
+              resolve(null);
+            });
           });
-        });
+        } else {
+          // Use standard guest request
+          const { sendChatMessageGuest } = await import("@/lib/guardianApi");
+          const response = await sendChatMessageGuest(message);
+          console.log("🔵 [useGuardianRAG] Guest response:", response);
+          setLoading(false);
+          return response;
+        }
       } else {
-        // Use standard request
-        const response = await sendChatMessage(message, token, conversationId);
-        console.log("🔵 [useGuardianRAG] Response:", response);
-        return response;
+        // Authenticated user - use regular endpoints
+        const token = await getToken();
+        console.log("🔵 [useGuardianRAG] Got token:", token ? "✓" : "✗");
+
+        if (onChunk) {
+          // Use streaming
+          return new Promise<ChatResponse | null>((resolve) => {
+            sendChatMessageStream(
+              message,
+              token,
+              conversationId,
+              onChunk,
+              (response) => {
+                console.log("🔵 [useGuardianRAG] Stream complete:", response);
+                setLoading(false);
+                resolve(response);
+              },
+              onStatus
+            ).catch((err) => {
+              const errorMsg = err.message || "Failed to send message";
+              setError(errorMsg);
+              console.error("🔴 [useGuardianRAG] Chat error:", err);
+              setLoading(false);
+              resolve(null);
+            });
+          });
+        } else {
+          // Use standard request
+          const response = await sendChatMessage(message, token, conversationId);
+          console.log("🔵 [useGuardianRAG] Response:", response);
+          setLoading(false); // Added for consistency with guest mode and error handling
+          return response;
+        }
       }
     } catch (err: any) {
       const errorMsg = err.message || "Failed to send message";
