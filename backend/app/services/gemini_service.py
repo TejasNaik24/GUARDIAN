@@ -77,11 +77,27 @@ class GeminiService:
             # Generate streaming response
             response = self.model.generate_content(prompt, stream=True)
             
+            response_generated = False
             for chunk in response:
+                # Check if response was blocked by safety filters
+                if hasattr(chunk, 'candidates') and chunk.candidates:
+                    candidate = chunk.candidates[0]
+                    if hasattr(candidate, 'finish_reason') and candidate.finish_reason:
+                        finish_reason = str(candidate.finish_reason)
+                        if 'SAFETY' in finish_reason:
+                            logger.warning(f"⚠️ Response blocked by safety filters: {finish_reason}")
+                            yield "I apologize, but I cannot provide a response to this query due to safety guidelines. Please rephrase your question or ask something else."
+                            return
+                
                 if chunk.text:
+                    response_generated = True
                     yield chunk.text
             
-            logger.info("✅ Generated streaming response")
+            if not response_generated:
+                logger.warning("⚠️ No response generated (possibly blocked by safety filters)")
+                yield "I apologize, but I couldn't generate a response. This might be due to safety guidelines. Please try rephrasing your question."
+            else:
+                logger.info("✅ Generated streaming response")
             
         except Exception as e:
             logger.error(f"❌ Error generating Gemini streaming response: {str(e)}")
@@ -109,6 +125,11 @@ class GeminiService:
             context_text = "\n\n---\n\n".join([f"**Context Chunk {i+1}:**\n{ctx}" for i, ctx in enumerate(context)])
             return f"""You are Guardian AI, an advanced medical assistant with access to a comprehensive database of medical documentation, emergency procedures, and first-aid guidelines.
 
+**ABOUT GUARDIAN AI:**
+- You are Guardian AI, developed by a dedicated team focused on making medical information accessible
+- You are powered by advanced AI technology to provide reliable medical guidance
+- Your mission is to help users access medical knowledge and emergency procedures quickly and safely
+
 **CRITICAL INSTRUCTIONS:**
 1. **USE THE PROVIDED CONTEXT**: The context below contains relevant excerpts from medical documents that have been uploaded to your knowledge base. **You MUST prioritize information from this context** when answering the user's question.
 
@@ -135,7 +156,12 @@ class GeminiService:
 
 **YOUR RESPONSE (remember to use the context above):**"""
         else:
-            return f"""You are Guardian AI, a helpful medical assistant. 
+            return f"""You are Guardian AI, a helpful medical assistant.
+
+**ABOUT GUARDIAN AI:**
+- You are Guardian AI, developed by a dedicated team focused on making medical information accessible
+- You are powered by advanced AI technology to provide reliable medical guidance
+- Your mission is to help users access medical knowledge and emergency procedures quickly and safely
 
 **IMPORTANT NOTE**: I don't have specific relevant information from my medical document database for this question, so I'll provide a general response based on my training.
 
