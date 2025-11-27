@@ -33,7 +33,7 @@ export default function VoiceChatContainer() {
   const [currentConversationId, setCurrentConversationId] = useState<
     string | undefined
   >(undefined);
-  const [isVoiceMode, setIsVoiceMode] = useState(true);
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [voiceUploadedFiles, setVoiceUploadedFiles] = useState<File[]>([]);
   const [pendingImages, setPendingImages] = useState<File[]>([]);
@@ -42,7 +42,7 @@ export default function VoiceChatContainer() {
     useState<ConversationState>("idle");
   const [showTranscript, setShowTranscript] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -71,7 +71,7 @@ export default function VoiceChatContainer() {
     resetTranscript,
   } = useSpeechRecognition();
 
-  const { speak, isSpeaking } = useSpeechSynthesis();
+  const { speak, isSpeaking, isSupported } = useSpeechSynthesis();
 
   // Use messages array for both voice and text modes since we call backend directly
   const displayMessages: Message[] = messages;
@@ -130,30 +130,22 @@ export default function VoiceChatContainer() {
   // Update conversation state based on speech status
   useEffect(() => {
     if (isVoiceMode) {
-      if (isListening && !isMuted) {
-        setConversationState("listening");
-      } else if (isSpeaking) {
+      if (isSpeaking) {
         setConversationState("speaking");
-      } else if (conversationState === "listening" && !isListening) {
-        // Just stopped listening, about to process
-        if (transcript) {
-          setConversationState("thinking");
-        } else {
-          setConversationState("idle");
-        }
-      } else if (!isListening && !isSpeaking) {
+      } else if (conversationState === "thinking") {
+        // Keep thinking state until speaking starts
+      } else if (!isMuted) {
+        // Always show listening state when unmuted and not speaking/thinking
+        setConversationState("listening");
+      } else {
         setConversationState("idle");
       }
     }
-    // Text mode - manual state management in handlers
-    // Don't automatically manage state here to avoid conflicts with streaming
   }, [
     isListening,
     isSpeaking,
     isMuted,
-    transcript,
     isVoiceMode,
-    isChatLoading,
     conversationState,
   ]);
 
@@ -165,7 +157,33 @@ export default function VoiceChatContainer() {
     }
   }, [isListening]);
 
-  const [thinkingText, setThinkingText] = useState("Analyzing");
+
+
+  // Auto-restart listening if unmuted and not listening (keep mic active)
+  useEffect(() => {
+    if (
+      isVoiceMode &&
+      !isMuted &&
+      !isListening &&
+      conversationState !== "thinking" &&
+      conversationState !== "speaking" &&
+      isSupported
+    ) {
+      const timer = setTimeout(() => {
+        startListening();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    isVoiceMode,
+    isMuted,
+    isListening,
+    conversationState,
+    isSupported,
+    startListening,
+  ]);
+
+  const [thinkingText, setThinkingText] = useState("Thinking");
   const streamingContentRef = useRef("");
   const streamingMessageIdRef = useRef<string | null>(null);
 
@@ -210,6 +228,13 @@ export default function VoiceChatContainer() {
     console.log("🎤 [VoiceChatContainer] Voice mode sending:", text);
     if (!text.trim() && !media) return;
 
+    // Auto-mute immediately after query submission
+    console.log("🔇 [VoiceChatContainer] Auto-muting microphone");
+    setIsMuted(true);
+    stopListening();
+
+    setConversationState("thinking");
+
     // Create media URL if file is present
     const mediaUrl = media ? URL.createObjectURL(media) : undefined;
     const mediaType = media?.type.startsWith("video/")
@@ -250,7 +275,7 @@ export default function VoiceChatContainer() {
     streamingContentRef.current = "";
 
     // Call Guardian AI backend with conversation_id if exists
-    setThinkingText("Analyzing");
+    setThinkingText("Thinking");
     setConversationState("thinking");
 
     // Track start time for minimum display duration
@@ -373,7 +398,7 @@ export default function VoiceChatContainer() {
     console.log(
       "🔄 [VoiceChatContainer] Setting conversationState to 'thinking'"
     );
-    setThinkingText("Analyzing");
+    setThinkingText("Thinking");
     setConversationState("thinking");
 
     // Track start time for minimum display duration
@@ -400,7 +425,7 @@ export default function VoiceChatContainer() {
       }
     );
 
-    // Ensure minimum 800ms display time for "Analyzing" indicator ONLY if we haven't started streaming yet
+    // Ensure minimum 800ms display time for "Thinking" indicator ONLY if we haven't started streaming yet
     const elapsed = Date.now() - startTime;
     const minDisplayTime = 800;
 
@@ -441,9 +466,11 @@ export default function VoiceChatContainer() {
       setConversationState("idle");
     }
   };
+
   const handleToggleMic = () => {
     setIsMuted(!isMuted);
     if (!isMuted) {
+      // Currently unmuted, switching to muted
       stopListening();
     }
   };
@@ -552,7 +579,7 @@ export default function VoiceChatContainer() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-      setConversationState("idle"); // Remove "Analyzing..." immediately
+      setConversationState("idle"); // Remove "Thinking..." immediately
 
       // Type out the response character by character
       let currentIndex = 0;
@@ -678,8 +705,21 @@ export default function VoiceChatContainer() {
   };
 
   const handleToggleMode = () => {
+    const switchingToVoice = !isVoiceMode;
+    console.log("🔄 [handleToggleMode] Toggling mode", {
+      currentMode: isVoiceMode ? 'voice' : 'text',
+      switchingToVoice,
+    });
+
     setIsVoiceMode(!isVoiceMode);
+
     if (isListening) stopListening();
+
+    // Play greeting when switching to voice mode (should work now with garbage collection fix)
+    if (switchingToVoice && isSupported) {
+      console.log("🎤 [handleToggleMode] Playing greeting");
+      speak("How may I assist you?");
+    }
   };
 
   return (

@@ -4,9 +4,13 @@ import { motion } from "framer-motion";
 
 interface GuardianAvatarProps {
   state: "idle" | "listening" | "thinking" | "speaking";
+  text?: string;
 }
 
-export default function GuardianAvatar({ state }: GuardianAvatarProps) {
+export default function GuardianAvatar({ state, text }: GuardianAvatarProps) {
+  // ... (existing code)
+
+
   // Define animation variants for each state
   const getAnimation = () => {
     switch (state) {
@@ -153,10 +157,18 @@ export default function GuardianAvatar({ state }: GuardianAvatarProps) {
         className="absolute -bottom-16 text-center"
       >
         <p className="text-sm font-medium text-[#64748B]">
-          {state === "idle" && "Ready to help"}
-          {state === "listening" && "Listening..."}
-          {state === "thinking" && "Thinking..."}
-          {state === "speaking" && "Speaking..."}
+          {text ? (
+            text
+          ) : (
+            <>
+              {state === "idle" && "How may I assist you?"}
+              {state === "listening" && "Listening..."}
+              {state === "thinking" && (
+                <span className="animate-pulse">Analyzing...</span>
+              )}
+              {state === "speaking" && "Speaking..."}
+            </>
+          )}
         </p>
       </motion.div>
     </div>

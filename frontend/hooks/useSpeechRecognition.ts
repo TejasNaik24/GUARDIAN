@@ -16,6 +16,10 @@ export default function useSpeechRecognition(): UseSpeechRecognitionReturn {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Silence detection timeout (ms)
+  const SILENCE_DURATION = 2000;
 
   useEffect(() => {
     // Check if browser supports Speech Recognition
@@ -27,7 +31,12 @@ export default function useSpeechRecognition(): UseSpeechRecognitionReturn {
       if (SpeechRecognition) {
         setIsSupported(true);
         const recognition = new SpeechRecognition();
-        recognition.continuous = true;
+
+        // Detect Safari - it doesn't support continuous mode well
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        console.log("🎤 [Recognition] Browser detected:", isSafari ? "Safari" : "Chrome/Other");
+
+        recognition.continuous = !isSafari; // Safari: false, Chrome: true
         recognition.interimResults = true;
         recognition.lang = "en-US";
 
@@ -45,6 +54,21 @@ export default function useSpeechRecognition(): UseSpeechRecognitionReturn {
           }
 
           setTranscript(finalTranscript || interimTranscript);
+
+          // Reset silence timeout
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+          }
+
+          if (finalTranscript || interimTranscript) {
+            silenceTimeoutRef.current = setTimeout(() => {
+              if (recognitionRef.current) {
+                recognitionRef.current.stop();
+                // Don't manually set isListening(false) here
+                // Let onend handle it to ensure engine is truly stopped
+              }
+            }, SILENCE_DURATION);
+          }
         };
 
         recognition.onerror = (event: any) => {
@@ -54,6 +78,9 @@ export default function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
         recognition.onend = () => {
           setIsListening(false);
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+          }
         };
 
         recognitionRef.current = recognition;
@@ -64,14 +91,26 @@ export default function useSpeechRecognition(): UseSpeechRecognitionReturn {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
     };
   }, []);
 
-  const startListening = () => {
+  const startListening = async () => {
     if (recognitionRef.current && !isListening) {
-      setTranscript("");
-      recognitionRef.current.start();
-      setIsListening(true);
+      try {
+        // Request microphone permission explicitly (helps with Safari)
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("🎤 [Recognition] Microphone permission granted");
+
+        setTranscript("");
+        recognitionRef.current.start();
+        setIsListening(true);
+        console.log("🎤 [Recognition] Started listening");
+      } catch (error) {
+        console.error("🎤 [Recognition] Microphone permission denied or error:", error);
+      }
     }
   };
 
