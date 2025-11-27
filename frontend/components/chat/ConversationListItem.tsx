@@ -42,19 +42,17 @@ export function ConversationListItem({
       onClick={onSelect}
       className={`
         relative p-2.5 rounded-lg cursor-pointer transition-all
-        ${
-          isActive
-            ? "bg-blue-50 border-l-2 border-blue-500"
-            : "bg-transparent hover:bg-gray-100 border-l-2 border-transparent"
+        ${isActive
+          ? "bg-blue-50 border-l-2 border-blue-500"
+          : "bg-transparent hover:bg-gray-100 border-l-2 border-transparent"
         }
       `}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <h3
-            className={`font-medium text-sm truncate ${
-              isActive ? "text-blue-900" : "text-gray-700"
-            }`}
+            className={`font-medium text-sm truncate ${isActive ? "text-blue-900" : "text-gray-700"
+              }`}
           >
             {conversation.title}
           </h3>
@@ -75,7 +73,7 @@ export function ConversationListItem({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               onClick={handleDelete}
-              className="text-red-500 hover:text-red-600 p-1 rounded hover:bg-red-50"
+              className="text-red-500 hover:text-red-600 p-1 rounded hover:bg-red-50 cursor-pointer"
             >
               <svg
                 className="w-4 h-4"

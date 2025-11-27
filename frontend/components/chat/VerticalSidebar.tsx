@@ -66,7 +66,7 @@ export function VerticalSidebar({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={onToggle}
-          className={`w-full h-10 rounded-lg bg-white hover:bg-gray-100 flex items-center transition-colors border border-gray-200 ${isExpanded ? "gap-3 px-3" : "justify-center"
+          className={`w-full h-10 rounded-lg bg-white hover:bg-gray-100 flex items-center transition-colors border border-gray-200 cursor-pointer ${isExpanded ? "gap-3 px-3" : "justify-center"
             }`}
           title="Toggle sidebar"
         >
@@ -111,7 +111,7 @@ export function VerticalSidebar({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={handleNewChat}
-          className={`w-full h-10 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center shadow-sm transition-all ${isExpanded ? "gap-3 px-3" : "justify-center"
+          className={`w-full h-10 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center shadow-sm transition-all cursor-pointer ${isExpanded ? "gap-3 px-3" : "justify-center"
             }`}
           title="New chat"
         >
