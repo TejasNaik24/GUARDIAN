@@ -39,16 +39,8 @@ export function VerticalSidebar({
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className="fixed left-0 top-0 h-full bg-[#f9f9f9] border-r border-gray-200 flex flex-col py-4 z-[200]"
     >
-      {/* Guardian Logo at Top */}
-      <div className="mb-3 pl-1">
-        <div className="flex items-center justify-start">
-          <img
-            src="/images/guardian-logo.png"
-            alt="GUARDIAN Logo"
-            className="w-[60px] h-[60px] object-contain"
-          />
-        </div>
-      </div>
+      {/* Spacer to keep buttons in position */}
+      <div className="mb-3 pl-1 h-[60px]" />
 
       {/* Sidebar Toggle Button */}
       <div className="px-3 mb-3 w-full">
