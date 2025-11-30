@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import MessageList from "./MessageList";
 import ChatInput from "./ChatInput";
 import MicButton from "../speechUI/MicButton";
 import TranscriptOverlay from "../speechUI/TranscriptOverlay";
 import ToggleSwitch from "../speechUI/ToggleSwitch";
-import useSpeechRecognition from "@/hooks/useSpeechRecognition";
-import useSpeechSynthesis from "@/hooks/useSpeechSynthesis";
 import Link from "next/link";
+import SpeechRecognition, {
+  useSpeechRecognition,
+} from "react-speech-recognition";
 
 interface Message {
   id: string;
@@ -26,26 +27,69 @@ export default function ChatContainer() {
   const [isVoiceMode, setIsVoiceMode] = useState(true);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
 
-  // Speech hooks
   const {
     transcript,
-    isListening,
-    startListening,
-    stopListening,
+    listening,
     resetTranscript,
-    isSupported: isSpeechRecognitionSupported,
+    browserSupportsSpeechRecognition,
   } = useSpeechRecognition();
 
-  const { speak, stop: stopSpeaking, isSpeaking } = useSpeechSynthesis();
-
-  // Handle voice input completion
+  // Handle browser support
   useEffect(() => {
-    if (transcript && !isListening) {
-      // User stopped speaking, process the transcript
-      handleSendMessage(transcript);
-      resetTranscript();
+    if (!browserSupportsSpeechRecognition) {
+      console.warn("Browser does not support speech recognition");
     }
-  }, [isListening]);
+  }, [browserSupportsSpeechRecognition]);
+
+  // Handle voice input completion with debounce
+  useEffect(() => {
+    if (isVoiceMode && transcript.trim()) {
+      // Wait a tiny bit to ensure transcript is done (debounce)
+      const timeout = setTimeout(() => {
+        // Only send if we are not currently speaking (to avoid self-triggering)
+        if (!window.speechSynthesis.speaking) {
+          handleSendMessage(transcript.trim());
+          resetTranscript();
+        }
+      }, 1500); // 1.5s silence detection
+
+      return () => clearTimeout(timeout);
+    }
+  }, [transcript, isVoiceMode]);
+
+  // Stop speaking if user starts talking (interruption)
+  useEffect(() => {
+    if (transcript && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
+  }, [transcript]);
+
+  const speakText = (text: string) => {
+    if (!isVoiceMode) return;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+
+    // 🛑 Stop mic BEFORE speech starts (prevents AI echo pickup)
+    try {
+      SpeechRecognition.stopListening();
+    } catch (err) {
+      console.error("Mic error before TTS:", err);
+    }
+
+    // 🔊 Resume mic AFTER speech ends
+    utterance.onend = () => {
+      try {
+        SpeechRecognition.startListening({ continuous: true });
+      } catch (err) {
+        console.error("Mic error on TTS end:", err);
+      }
+    };
+
+    // 🗣️ Start speaking
+    window.speechSynthesis.cancel(); // Cancel any current speech
+    window.speechSynthesis.speak(utterance);
+  };
 
   const handleSendMessage = (text: string) => {
     if (!text.trim()) return;
@@ -61,6 +105,16 @@ export default function ChatContainer() {
       }),
     };
     setMessages((prev) => [...prev, userMessage]);
+
+    // Stop listening while processing
+    if (isVoiceMode) {
+      try {
+        SpeechRecognition.stopListening();
+      } catch (err) {
+        console.error("Mic error:", err);
+      }
+      resetTranscript();
+    }
 
     // Simulate AI response (placeholder)
     setIsTyping(true);
@@ -85,16 +139,49 @@ export default function ChatContainer() {
 
       // Speak the response in voice mode
       if (isVoiceMode) {
-        speak(aiResponseText);
+        speakText(aiResponseText);
       }
     }, 2000);
   };
 
   const handleMicToggle = () => {
-    if (isListening) {
-      stopListening();
+    if (listening) {
+      try {
+        SpeechRecognition.stopListening();
+      } catch (err) {
+        console.error("Mic error:", err);
+      }
     } else {
-      startListening();
+      window.speechSynthesis.cancel();
+      resetTranscript();
+      try {
+        SpeechRecognition.startListening({ continuous: true });
+      } catch (err) {
+        console.error("Mic error:", err);
+      }
+    }
+  };
+
+  const handleModeToggle = () => {
+    const newMode = !isVoiceMode;
+    setIsVoiceMode(newMode);
+
+    if (newMode) {
+      // Turning ON voice mode
+      resetTranscript();
+
+      // Play greeting
+      const greeting = "How may I assist you?";
+      speakText(greeting);
+
+    } else {
+      // Turning OFF voice mode
+      window.speechSynthesis.cancel();
+      try {
+        SpeechRecognition.stopListening();
+      } catch (err) {
+        console.error("Mic error:", err);
+      }
     }
   };
 
@@ -106,11 +193,7 @@ export default function ChatContainer() {
           {/* Mode Toggle */}
           <ToggleSwitch
             isVoiceMode={isVoiceMode}
-            onToggle={() => {
-              setIsVoiceMode(!isVoiceMode);
-              if (isListening) stopListening();
-              if (isSpeaking) stopSpeaking();
-            }}
+            onToggle={handleModeToggle}
           />
         </div>
       </header>
@@ -132,16 +215,16 @@ export default function ChatContainer() {
               <div className="flex flex-col items-center justify-center py-12">
                 <TranscriptOverlay
                   transcript={transcript}
-                  isListening={isListening}
+                  isListening={listening}
                 />
                 <MicButton
-                  isListening={isListening}
+                  isListening={listening}
                   onToggle={handleMicToggle}
                 />
               </div>
 
               {/* Empty state helper */}
-              {messages.length === 0 && !isListening && (
+              {messages.length === 0 && !listening && (
                 <div className="text-center mt-8 space-y-2">
                   <p className="text-[#64748B] text-sm">
                     Tap the microphone and describe your symptoms
@@ -171,11 +254,46 @@ export default function ChatContainer() {
         </div>
       </div>
 
+      {/* Sidebar */}
+      <div className="fixed left-0 top-0 h-screen w-20 bg-white border-r border-[#E5E7EB] shadow-sm flex flex-col items-center py-6 z-50">
+        {/* Logo/Brand */}
+        <Link
+          href="/chat"
+          className="mb-8 p-3 rounded-xl bg-[#3B82F6] shadow-md hover:shadow-lg transition-shadow cursor-pointer flex items-center justify-center"
+        >
+          <img
+            src="/images/guardian-logo.png"
+            alt="GUARDIAN Logo"
+            className="w-8 h-8 object-contain"
+          />
+        </Link>
+
+        {/* Collapse Button */}
+        <button
+          className="mb-6 p-2 rounded-lg hover:bg-[#F1F5F9] transition-colors"
+          aria-label="Collapse sidebar"
+        >
+          <svg
+            className="w-6 h-6 text-[#64748B]"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+            />
+          </svg>
+        </button>
+      </div>
+
       {/* Disclaimer */}
       {showDisclaimer && (
         <div className="bg-[#FEF3C7] border-t border-[#FCD34D] px-4 py-2 relative">
           <p className="text-xs text-[#92400E] text-center max-w-5xl mx-auto pr-8">
-            ⚠️ <strong>Medical Disclaimer:</strong> Guardian is an AI assistant
+            ⚠️ <strong>Medical Disclaimer:</strong> GUARDIAN is an AI assistant
             and not a replacement for professional medical advice. Always call
             911 for emergencies.
           </p>

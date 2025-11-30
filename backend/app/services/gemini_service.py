@@ -173,17 +173,15 @@ For medical emergencies, please call emergency services immediately. For medical
 
     async def analyze_image(
         self,
-        image_bytes: bytes,
-        mime_type: str,
+        images: List[dict],
         user_message: Optional[str] = None,
         conversation_history: Optional[List[dict]] = None
     ) -> str:
         """
-        Analyze medical image using Gemini Vision
+        Analyze medical images using Gemini Vision
         
         Args:
-            image_bytes: Image file bytes
-            mime_type: Image MIME type (image/jpeg, etc.)
+            images: List of dicts containing 'content' (bytes) and 'mime_type'
             user_message: Optional user question about the image
             conversation_history: Optional list of previous messages for context
             
@@ -194,18 +192,24 @@ For medical emergencies, please call emergency services immediately. For medical
             import PIL.Image
             import io
             
-            # Load image from bytes
-            image = PIL.Image.open(io.BytesIO(image_bytes))
+            # Load all images
+            pil_images = []
+            for img_data in images:
+                image = PIL.Image.open(io.BytesIO(img_data["content"]))
+                pil_images.append(image)
             
             # Build medical analysis prompt
-            prompt = self._build_vision_prompt(user_message, conversation_history)
+            prompt = self._build_vision_prompt(user_message, conversation_history, len(pil_images))
             
-            # Generate response with image
-            response = self.model.generate_content([prompt, image])
+            # Generate response with all images
+            # Gemini accepts [prompt, image1, image2, ...]
+            content_parts = [prompt] + pil_images
+            
+            response = self.model.generate_content(content_parts)
             
             if not response or not response.text:
                 logger.warning("⚠️  Empty response from Gemini Vision")
-                return "I apologize, but I couldn't analyze this image. Please try again."
+                return "I apologize, but I couldn't analyze these images. Please try again."
             
             logger.info(f"✅ Vision analysis complete ({len(response.text)} chars)")
             return response.text.strip()
@@ -214,16 +218,16 @@ For medical emergencies, please call emergency services immediately. For medical
             logger.error(f"❌ Error analyzing image with Gemini Vision: {str(e)}")
             raise Exception(f"Vision analysis failed: {str(e)}")
     
-    def _build_vision_prompt(self, user_message: Optional[str] = None, conversation_history: Optional[List[dict]] = None) -> str:
+    def _build_vision_prompt(self, user_message: Optional[str] = None, conversation_history: Optional[List[dict]] = None, image_count: int = 1) -> str:
         """Build medical image analysis prompt with conversation history"""
-        base_prompt = """You are Guardian AI, a medical-first-aid assistant.
+        base_prompt = f"""You are Guardian AI, a medical-first-aid assistant.
 
-Below is the user's message and an image they uploaded.
-Your job is to combine BOTH pieces of information.
+Below is the user's message and {image_count} image(s) they uploaded.
+Your job is to combine ALL pieces of information.
 
 PRIORITY ORDER:
 1. First, understand the user's text message.
-2. Second, analyze the image.
+2. Second, analyze the image(s).
 3. Then answer the user directly, clearly, and concisely.
 
 BEHAVIOR MODES:

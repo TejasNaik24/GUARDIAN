@@ -25,23 +25,23 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 @router.post("/vision/analyze")
 async def analyze_image(
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(...),
     message: Optional[str] = Form(None),
     conversation_id: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Analyze medical image using Gemini Vision + RAG
+    Analyze medical images using Gemini Vision + RAG
     
     Process:
-    1. Validate image file
-    2. Analyze with Gemini Vision
+    1. Validate image files
+    2. Analyze with Gemini Vision (batch)
     3. Search RAG for relevant context
     4. Combine vision + RAG insights
     5. Return comprehensive response
     
     Args:
-        file: Image file upload
+        files: List of image file uploads
         message: Optional user message/question
         current_user: Authenticated user
         
@@ -49,22 +49,34 @@ async def analyze_image(
         Vision analysis with RAG context
     """
     try:
-        # 1. Validate file type
-        if file.content_type not in ALLOWED_MIME_TYPES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_MIME_TYPES)}"
-            )
+        # 1. Validate file types and sizes
+        valid_images = []
+        total_size = 0
         
-        # 2. Read and validate file size
-        image_bytes = await file.read()
-        if len(image_bytes) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Max size: {MAX_FILE_SIZE // (1024*1024)}MB"
-            )
-        
-        logger.info(f"📸 Analyzing image: {file.filename} ({len(image_bytes)} bytes)")
+        for file in files:
+            if file.content_type not in ALLOWED_MIME_TYPES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid file type for {file.filename}. Allowed: {', '.join(ALLOWED_MIME_TYPES)}"
+                )
+            
+            content = await file.read()
+            size = len(content)
+            total_size += size
+            
+            if size > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File {file.filename} too large. Max size: {MAX_FILE_SIZE // (1024*1024)}MB"
+                )
+                
+            valid_images.append({
+                "content": content,
+                "mime_type": file.content_type,
+                "filename": file.filename
+            })
+            
+        logger.info(f"📸 Analyzing {len(valid_images)} images (Total: {total_size} bytes)")
         
         # 3. Get or create conversation
         conversation_history = []
@@ -94,8 +106,7 @@ async def analyze_image(
         # 4. Analyze with Gemini Vision
         gemini_service = GeminiService()
         vision_summary = await gemini_service.analyze_image(
-            image_bytes=image_bytes,
-            mime_type=file.content_type,
+            images=valid_images,
             user_message=message,
             conversation_history=conversation_history
         )
@@ -107,7 +118,7 @@ async def analyze_image(
         await conversation_service.save_message(
             conversation_id=conversation_id,
             role="user",
-            content=message or "Sent an image"
+            content=message or f"Sent {len(valid_images)} images"
         )
         # Save assistant response  
         await conversation_service.save_message(
@@ -147,14 +158,16 @@ async def analyze_image(
             logger.info("ℹ️  No RAG context found, using vision-only response")
             final_response = vision_summary
         
-        # 6. Encode image for preview (optional)
-        image_preview_base64 = base64.b64encode(image_bytes).decode('utf-8')
-        image_preview_url = f"data:{file.content_type};base64,{image_preview_base64}"
+        # 6. Encode images for preview
+        image_preview_urls = []
+        for img in valid_images:
+            image_preview_base64 = base64.b64encode(img["content"]).decode('utf-8')
+            image_preview_urls.append(f"data:{img['mime_type']};base64,{image_preview_base64}")
         
         return {
             "status": "success",
-            "conversation_id": conversation_id,  # NEW - return conversation ID
-            "image_preview_url": image_preview_url,
+            "conversation_id": conversation_id,
+            "image_preview_urls": image_preview_urls, # LIST of URLs
             "vision_summary": vision_summary,
             "rag_context_used": len(context_docs) > 0,
             "final_answer": final_response,

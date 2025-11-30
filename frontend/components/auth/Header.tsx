@@ -14,23 +14,15 @@ export default function Header({ onOpenAuth }: HeaderProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] rounded-lg flex items-center justify-center shadow-sm">
-              <svg
-                className="w-5 h-5 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                />
-              </svg>
+          <Link href="/" className="flex items-center space-x-1 group">
+            <div className="flex items-center justify-center">
+              <img
+                src="/images/guardian-logo.png"
+                alt="GUARDIAN Logo"
+                className="w-12 h-12 object-contain"
+              />
             </div>
-            <span className="text-lg font-bold text-[#1E3A8A]">Guardian</span>
+            <span className="text-2xl font-bold text-[#1E3A8A]">GUARDIAN</span>
           </Link>
 
           {/* Auth Buttons */}

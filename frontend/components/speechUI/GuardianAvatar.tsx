@@ -106,14 +106,12 @@ export default function GuardianAvatar({ state, text }: GuardianAvatarProps) {
       <motion.div
         animate={getAnimation()}
         transition={getTransition()}
-        className="relative z-10 w-48 h-48 rounded-full bg-[#64748B] shadow-2xl flex items-center justify-center overflow-hidden"
+        className="relative z-10 w-64 h-64 flex items-center justify-center overflow-visible"
       >
-        {/* Gradient overlay for depth */}
-        <div className="absolute inset-0 bg-linear-to-br from-[#475569]/50 to-[#1E293B]/50" />
 
         {/* Thinking animation - rotating dots */}
         {state === "thinking" && (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center z-20">
             {[0, 1, 2].map((i) => (
               <motion.div
                 key={i}
@@ -126,27 +124,19 @@ export default function GuardianAvatar({ state, text }: GuardianAvatarProps) {
                   repeat: Infinity,
                   delay: i * 0.2,
                 }}
-                className="w-3 h-3 bg-white rounded-full mx-1"
+                className="w-4 h-4 bg-[#3B82F6] rounded-full mx-1 shadow-md"
               />
             ))}
           </div>
         )}
 
-        {/* Center icon placeholder - will be replaced with actual Guardian logo */}
-        <div className="relative z-10 w-24 h-24 rounded-full bg-[#475569] flex items-center justify-center">
-          <svg
-            className="w-12 h-12 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-            />
-          </svg>
+        {/* Center logo - replace SVG with actual logo */}
+        <div className="relative z-10 w-full h-full flex items-center justify-center">
+          <img
+            src="/images/guardian-logo.png"
+            alt="GUARDIAN"
+            className="w-full h-full object-contain drop-shadow-2xl"
+          />
         </div>
       </motion.div>
 

@@ -366,7 +366,7 @@ export async function checkDatabaseHealth(token: string): Promise<boolean> {
 export interface VisionResponse {
   status: string;
   conversation_id: string;
-  image_preview_url: string;
+  image_preview_urls: string[]; // Changed from single url
   vision_summary: string;
   rag_context_used: boolean;
   final_answer: string;
@@ -377,16 +377,21 @@ export interface VisionResponse {
 }
 
 /**
- * Analyze medical image using Gemini Vision + RAG
+ * Analyze medical images using Gemini Vision + RAG
  */
 export async function analyzeImageWithVision(
-  file: File,
+  files: File[],
   token: string,
   message?: string,
   conversationId?: string
 ): Promise<VisionResponse> {
   const formData = new FormData();
-  formData.append("file", file);
+
+  // Append all files
+  files.forEach(file => {
+    formData.append("files", file);
+  });
+
   if (message) {
     formData.append("message", message);
   }
@@ -405,7 +410,7 @@ export async function analyzeImageWithVision(
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || "Failed to analyze image");
+    throw new Error(error.detail || "Failed to analyze images");
   }
 
   return response.json();

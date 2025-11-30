@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SupabaseProvider } from "@/app/providers/SupabaseProvider";
 import { ConversationProvider } from "@/contexts/ConversationContext";
+import { SpeechProvider } from "@/components/speech/SpeechProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,9 +17,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Guardian - Your AI Health Assistant",
+  title: "GUARDIAN",
   description:
     "Memory-enabled AI health assistant for medical insights and document assistance",
+  icons: {
+    icon: "/images/guardian-logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -33,7 +37,9 @@ export default function RootLayout({
       >
         <SupabaseProvider>
           <AuthProvider>
-            <ConversationProvider>{children}</ConversationProvider>
+            <ConversationProvider>
+              <SpeechProvider>{children}</SpeechProvider>
+            </ConversationProvider>
           </AuthProvider>
         </SupabaseProvider>
       </body>

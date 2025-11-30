@@ -4,18 +4,20 @@ import { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import MicButton from "./MicButton";
 import MediaPreview from "./MediaPreview";
-import useSpeechRecognition from "@/hooks/useSpeechRecognition";
+import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 
 interface SpeechInputControlsProps {
   isVoiceMode: boolean;
   onToggleMode: () => void;
   isListening: boolean;
   onToggleMic: () => void;
-  onSendMessage: (text: string, media?: File) => void;
+  onSendMessage: (text: string, media?: File | File[]) => void;
   disabled?: boolean;
   currentTranscript?: string;
   pendingImages?: File[];
   onPendingImagesChange?: (files: File[]) => void;
+  isGenerating?: boolean;
+  onStop?: () => void;
 }
 
 const MAX_FILES = 4;
@@ -30,6 +32,8 @@ export default function SpeechInputControls({
   currentTranscript = "",
   pendingImages = [],
   onPendingImagesChange,
+  isGenerating = false,
+  onStop,
 }: SpeechInputControlsProps) {
   const [textInput, setTextInput] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -45,11 +49,12 @@ export default function SpeechInputControls({
   // Separate speech recognition hook for dictation in text mode
   const {
     transcript: dictationTranscript,
-    isListening: isDictationListening,
-    startListening: startDictation,
-    stopListening: stopDictation,
+    listening: isDictationListening,
     resetTranscript: resetDictation,
   } = useSpeechRecognition();
+
+  const startDictation = () => SpeechRecognition.startListening({ continuous: true });
+  const stopDictation = () => SpeechRecognition.stopListening();
 
   // Auto-resize textarea
   useEffect(() => {
@@ -95,31 +100,33 @@ export default function SpeechInputControls({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     console.log("🔍 [SpeechInputControls] Files selected:", files);
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
     const imageTypes = ["image/jpeg", "image/jpg", "image/png", "image/heic", "image/webp"];
     const audioVideoTypes = ["video/mp4", "audio/mpeg", "audio/mp3", "audio/wav"];
 
-    const file = files[0]; // Take first file
-    console.log("📁 [SpeechInputControls] File type:", file.type, "Name:", file.name);
+    // Convert FileList to array
+    const newFiles = Array.from(files);
 
-    const isImage = imageTypes.includes(file.type);
-    console.log("🖼️ [SpeechInputControls] Is image?", isImage);
+    // Filter valid files
+    const validFiles = newFiles.filter(file =>
+      imageTypes.includes(file.type) || audioVideoTypes.includes(file.type)
+    );
 
-    if (isImage) {
-      // For images, add to uploadedFiles so user can type a message
-      console.log("✅ [SpeechInputControls] Image added to preview, waiting for user message");
-      setUploadedFiles([file]);
+    if (validFiles.length === 0) return;
+
+    // Calculate how many we can add
+    const remainingSlots = MAX_FILES - uploadedFiles.length;
+    const filesToAdd = validFiles.slice(0, remainingSlots);
+
+    if (filesToAdd.length > 0) {
+      console.log(`✅ [SpeechInputControls] Adding ${filesToAdd.length} files`);
+      setUploadedFiles(prev => [...prev, ...filesToAdd]);
+
       // Focus the text input so user can type
       setTimeout(() => {
         textareaRef.current?.focus();
       }, 100);
-    } else if (audioVideoTypes.includes(file.type)) {
-      // Audio/video files can be previewed and attached
-      const remainingSlots = MAX_FILES - uploadedFiles.length;
-      if (remainingSlots > 0) {
-        setUploadedFiles([...uploadedFiles, file]);
-      }
     }
 
     // Reset input
@@ -134,20 +141,11 @@ export default function SpeechInputControls({
   };
 
   const handleSend = () => {
-    // Check if it's an image file
-    const hasImage = uploadedFiles.length > 0 &&
-      uploadedFiles[0].type.startsWith("image/");
-
-    // For images, require text input
-    if (hasImage && !textInput.trim()) {
-      // Don't send - user needs to type a message for the image
-      return;
-    }
-
+    // Allow sending if there's text OR files
     if (textInput.trim() || uploadedFiles.length > 0) {
       console.log("🚀 [SpeechInputControls] Sending message with files:", uploadedFiles.length);
-      // For now, send with first file (backend will be updated later for multiple)
-      onSendMessage(textInput.trim(), uploadedFiles[0] || undefined);
+      // Send all files
+      onSendMessage(textInput.trim(), uploadedFiles);
       console.log("🧹 [SpeechInputControls] Clearing text and uploaded files");
       setTextInput("");
       setUploadedFiles([]);
@@ -411,33 +409,45 @@ export default function SpeechInputControls({
             {/* Send Button */}
             <motion.button
               whileHover={{
-                scale: textInput.trim() || uploadedFiles.length > 0 ? 1.05 : 1,
+                scale: (textInput.trim() || uploadedFiles.length > 0 || isGenerating) ? 1.05 : 1,
               }}
               whileTap={{
-                scale: textInput.trim() || uploadedFiles.length > 0 ? 0.95 : 1,
+                scale: (textInput.trim() || uploadedFiles.length > 0 || isGenerating) ? 0.95 : 1,
               }}
-              onClick={handleSend}
+              onClick={isGenerating ? onStop : handleSend}
               disabled={
-                disabled || (!textInput.trim() && uploadedFiles.length === 0)
+                disabled || (!isGenerating && !textInput.trim() && uploadedFiles.length === 0)
               }
-              className={`shrink-0 p-2 rounded-lg transition-all ${(textInput.trim() || uploadedFiles.length > 0) && !disabled
+              className={`shrink-0 p-2 rounded-lg transition-all ${(textInput.trim() || uploadedFiles.length > 0 || isGenerating) && !disabled
                 ? "bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] text-white shadow-md hover:shadow-lg cursor-pointer"
                 : "bg-[#E5E7EB] text-[#94A3B8] cursor-not-allowed"
                 }`}
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                />
-              </svg>
+              {isGenerating ? (
+                // Stop icon (square)
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
+              ) : (
+                // Send icon
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                  />
+                </svg>
+              )}
             </motion.button>
           </div>
         )}

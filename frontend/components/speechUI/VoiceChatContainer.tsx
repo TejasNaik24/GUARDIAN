@@ -5,8 +5,7 @@ import { flushSync } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import GuardianAvatar from "./GuardianAvatar";
 import SpeechInputControls from "./SpeechInputControls";
-import useSpeechRecognition from "@/hooks/useSpeechRecognition";
-import useSpeechSynthesis from "@/hooks/useSpeechSynthesis";
+import { useSpeechContext } from "@/components/speech/SpeechProvider";
 import useChat from "@/hooks/useChat";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGuardianRAG } from "@/hooks/useGuardianRAG";
@@ -20,6 +19,7 @@ interface Message {
   isUser: boolean;
   timestamp: string;
   mediaUrl?: string;
+  mediaUrls?: string[]; // For multiple images
   mediaType?: "image" | "video";
 }
 
@@ -33,7 +33,6 @@ export default function VoiceChatContainer() {
   const [currentConversationId, setCurrentConversationId] = useState<
     string | undefined
   >(undefined);
-  const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [voiceUploadedFiles, setVoiceUploadedFiles] = useState<File[]>([]);
   const [pendingImages, setPendingImages] = useState<File[]>([]);
@@ -42,13 +41,14 @@ export default function VoiceChatContainer() {
     useState<ConversationState>("idle");
   const [showTranscript, setShowTranscript] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
-  const [isMuted, setIsMuted] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const lastMessageRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Chat hook for text mode
   const {
@@ -62,16 +62,21 @@ export default function VoiceChatContainer() {
     removeAttachment,
   } = useChat();
 
-  // Speech hooks
+  // Speech hooks from global context
   const {
     transcript,
-    isListening,
-    startListening,
-    stopListening,
-    resetTranscript,
-  } = useSpeechRecognition();
+    state: speechState,
+    isVoiceMode,
+    toggleVoiceMode,
+    isMicMuted,
+    toggleMic,
+    speak,
+    isTTSSupported: isSupported
+  } = useSpeechContext();
 
-  const { speak, isSpeaking, isSupported } = useSpeechSynthesis();
+  // Map speech state to local conversation state
+  const isListening = speechState === 'listening';
+  const isSpeaking = speechState === 'speaking';
 
   // Use messages array for both voice and text modes since we call backend directly
   const displayMessages: Message[] = messages;
@@ -134,7 +139,7 @@ export default function VoiceChatContainer() {
         setConversationState("speaking");
       } else if (conversationState === "thinking") {
         // Keep thinking state until speaking starts
-      } else if (!isMuted) {
+      } else if (!isMicMuted) {
         // Always show listening state when unmuted and not speaking/thinking
         setConversationState("listening");
       } else {
@@ -144,44 +149,18 @@ export default function VoiceChatContainer() {
   }, [
     isListening,
     isSpeaking,
-    isMuted,
+    isMicMuted,
     isVoiceMode,
     conversationState,
   ]);
 
   // Handle voice input completion
   useEffect(() => {
-    if (transcript && !isListening && !isMuted) {
+    if (transcript && !isListening && !isMicMuted) {
       handleVoiceSendMessage(transcript);
-      resetTranscript();
+      // resetTranscript is handled by SpeechProvider on toggle/start
     }
   }, [isListening]);
-
-
-
-  // Auto-restart listening if unmuted and not listening (keep mic active)
-  useEffect(() => {
-    if (
-      isVoiceMode &&
-      !isMuted &&
-      !isListening &&
-      conversationState !== "thinking" &&
-      conversationState !== "speaking" &&
-      isSupported
-    ) {
-      const timer = setTimeout(() => {
-        startListening();
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [
-    isVoiceMode,
-    isMuted,
-    isListening,
-    conversationState,
-    isSupported,
-    startListening,
-  ]);
 
   const [thinkingText, setThinkingText] = useState("Thinking");
   const streamingContentRef = useRef("");
@@ -215,6 +194,9 @@ export default function VoiceChatContainer() {
             text: currentText + nextChars
           };
           return newMessages;
+        } else if (currentText.length === targetText.length && targetText.length > 0) {
+          // Typing is complete - turn off generating state
+          setIsGenerating(false);
         }
         return prev;
       });
@@ -223,36 +205,52 @@ export default function VoiceChatContainer() {
     return () => clearInterval(interval);
   }, []);
 
+  // Stop generation handler
+  const handleStop = () => {
+    console.log("🛑 [VoiceChatContainer] Stopping generation");
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+    setConversationState("idle");
+    streamingMessageIdRef.current = null;
+  };
+
   // Voice mode message handler (calls Guardian backend)
-  const handleVoiceSendMessage = async (text: string, media?: File) => {
+  const handleVoiceSendMessage = async (text: string, media?: File | File[]) => {
     console.log("🎤 [VoiceChatContainer] Voice mode sending:", text);
     if (!text.trim() && !media) return;
 
+    // Set generating state
+    setIsGenerating(true);
+
     // Auto-mute immediately after query submission
     console.log("🔇 [VoiceChatContainer] Auto-muting microphone");
-    setIsMuted(true);
-    stopListening();
+    if (!isMicMuted) {
+      toggleMic(); // Mute
+    }
 
     setConversationState("thinking");
 
-    // Create media URL if file is present
-    const mediaUrl = media ? URL.createObjectURL(media) : undefined;
-    const mediaType = media?.type.startsWith("video/")
-      ? "video"
-      : media
-        ? "image"
-        : undefined;
+    // Handle multiple files
+    const files = Array.isArray(media) ? media : media ? [media] : [];
 
-    // Add user message
+    // Create media URLs for all files
+    const mediaUrls = files.map(file => URL.createObjectURL(file));
+    const mediaType = files.length > 0 && files[0].type.startsWith("video/") ? "video" : "image";
+
+    // Add user message with ALL images
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: text || "Sent media",
+      text: text || (files.length > 0 ? `Sent ${files.length} files` : "Sent media"),
       isUser: true,
       timestamp: new Date().toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
       }),
-      mediaUrl,
+      mediaUrls: mediaUrls, // Use plural for multiple
+      mediaUrl: mediaUrls[0], // Fallback for single
       mediaType,
     };
     setMessages((prev) => [...prev, userMessage]);
@@ -281,55 +279,95 @@ export default function VoiceChatContainer() {
     // Track start time for minimum display duration
     const startTime = Date.now();
 
+    // If we have images, we use the vision API (which doesn't stream yet in this implementation, but we simulate it)
+    // OR we use the chat API if no images. 
+    // Wait, the chat() hook is for text only. We need to handle images differently.
+    // Since we are in handleVoiceSendMessage, we need to decide which API to call.
+
+    if (files.length > 0 && mediaType === "image") {
+      // Use handleImageAnalysis logic but for batch
+      // We can't call handleImageAnalysis directly because it adds its own messages
+      // So we'll call the API directly here
+      try {
+        const token = session?.access_token;
+        if (!token) throw new Error("Not authenticated");
+
+        const { analyzeImageWithVision } = await import("@/lib/guardianApi");
+        const response = await analyzeImageWithVision(files, token, text, currentConversationId);
+
+        if (response.conversation_id && !currentConversationId) {
+          setCurrentConversationId(response.conversation_id);
+        }
+
+        // Simulate streaming for the response
+        const fullText = response.final_answer;
+        streamingContentRef.current = fullText;
+
+        // We need to manually trigger the typing effect since we bypassed the chat() hook
+        // The useEffect loop reads from streamingContentRef.current, so we just set it?
+        // No, the useEffect loop appends characters. If we set it all at once, it might jump.
+        // Let's just set conversationState to idle and let the loop catch up?
+        // Actually, the loop compares currentText length to targetText length.
+        // So setting streamingContentRef.current = fullText will trigger the typing.
+
+        setConversationState("idle");
+
+        // Speak response
+        if (isVoiceMode && !isMicMuted) {
+          speak(fullText);
+        }
+
+        // Don't set isGenerating false here - the typing effect useEffect will handle it
+
+      } catch (error) {
+        console.error("Error analyzing images:", error);
+        setMessages((prev) => prev.filter(m => m.id !== assistantMessageId));
+        const errorMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          text: "Sorry, I couldn't analyze the images.",
+          isUser: false,
+          timestamp: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        setConversationState("idle");
+        setIsGenerating(false);
+      }
+      return;
+    }
+
+    // Normal text chat
     const response = await chat(
       text,
       currentConversationId,
       (chunk: string) => {
-        // Just update the target content, the useEffect loop handles the UI update
         streamingContentRef.current += chunk;
-
-        // If we have received some text, we can switch from thinking to speaking/idle
         if (streamingContentRef.current.length > 0 && conversationState === "thinking") {
-          // We keep it in thinking or switch to a "streaming" state if we had one
+          // switch state if needed
         }
       },
       (status: string) => {
-        console.log("📊 [VoiceChatContainer] Status received:", status);
-        if (status === "generating") {
-          setThinkingText("Thinking...");
-        }
+        if (status === "generating") setThinkingText("Thinking...");
       }
     );
 
-    // Let's clear thinking state as soon as we get response or error
     setConversationState("idle");
 
     if (response) {
-      // Store conversation_id from response for future messages
       if (response.conversation_id && !currentConversationId) {
         setCurrentConversationId(response.conversation_id);
       }
-
-      // Ensure the final message is set correctly (in case of any missed updates)
-      // We update the REF to the final message, and let the loop catch up
       streamingContentRef.current = response.message;
-
-      // Speak the response
       setConversationState("speaking");
       speak(response.message);
+      // Don't set isGenerating false here - the typing effect useEffect will handle it
     } else {
-      // Error handling - remove the empty message and show error
       setMessages((prev) => prev.filter(m => m.id !== assistantMessageId));
       streamingMessageIdRef.current = null;
-
       const errorMessage: Message = {
         id: (Date.now() + 2).toString(),
-        text: "Sorry, I couldn't process your request. Please try again.",
+        text: "Sorry, I couldn't process your request.",
         isUser: false,
-        timestamp: new Date().toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
+        timestamp: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
       };
       setMessages((prev) => [...prev, errorMessage]);
       setConversationState("idle");
@@ -337,42 +375,45 @@ export default function VoiceChatContainer() {
   };
 
   // Text mode message handler (calls Guardian backend too)
-  const handleTextSendMessage = async (text: string, media?: File) => {
+  const handleTextSendMessage = async (text: string, media?: File | File[]) => {
     if (!text.trim() && !media) return;
+
+    setIsGenerating(true);
 
     console.log("📝 [VoiceChatContainer] Text mode sending:", text);
     console.log("📁 [VoiceChatContainer] Media:", media);
 
-    // Check if media is an image
-    const imageTypes = ["image/jpeg", "image/jpg", "image/png", "image/heic", "image/webp"];
-    const isImage = media && imageTypes.includes(media.type);
-    console.log("🖼️ [VoiceChatContainer] Is image?", isImage);
+    // Normalize media to array
+    const files = Array.isArray(media) ? media : media ? [media] : [];
 
-    if (isImage && media) {
-      // Handle image with vision API
+    // Check if media contains images
+    const imageTypes = ["image/jpeg", "image/jpg", "image/png", "image/heic", "image/webp"];
+    const images = files.filter(f => imageTypes.includes(f.type));
+
+    console.log(`🖼️ [VoiceChatContainer] Found ${images.length} images`);
+
+    if (images.length > 0) {
+      // Handle images with vision API
       console.log("✅ [VoiceChatContainer] Calling handleImageAnalysis");
-      await handleImageAnalysis(media, text.trim() || undefined);
+      await handleImageAnalysis(images, text.trim() || undefined);
       return;
     }
 
-    // Create media URL if file is present
-    const mediaUrl = media ? URL.createObjectURL(media) : undefined;
-    const mediaType = media?.type.startsWith("video/")
-      ? "video"
-      : media
-        ? "image"
-        : undefined;
+    // Create media URLs for all files
+    const mediaUrls = files.map(file => URL.createObjectURL(file));
+    const mediaType = files.length > 0 && files[0].type.startsWith("video/") ? "video" : "image";
 
     // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: text || "Sent media",
+      text: text || (files.length > 0 ? `Sent ${files.length} files` : "Sent media"),
       isUser: true,
       timestamp: new Date().toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
       }),
-      mediaUrl,
+      mediaUrls: mediaUrls,
+      mediaUrl: mediaUrls[0],
       mediaType,
     };
     setMessages((prev) => [...prev, userMessage]);
@@ -448,6 +489,7 @@ export default function VoiceChatContainer() {
       // Final update to ensure consistency
       // We update the REF to the final message, and let the loop catch up
       streamingContentRef.current = response.message;
+      // Don't set isGenerating false here - the typing effect useEffect will handle it
     } else {
       // Error handling
       setMessages((prev) => prev.filter(m => m.id !== assistantMessageId));
@@ -464,15 +506,12 @@ export default function VoiceChatContainer() {
       };
       setMessages((prev) => [...prev, errorMessage]);
       setConversationState("idle");
+      setIsGenerating(false);
     }
   };
 
   const handleToggleMic = () => {
-    setIsMuted(!isMuted);
-    if (!isMuted) {
-      // Currently unmuted, switching to muted
-      stopListening();
-    }
+    toggleMic();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -481,7 +520,10 @@ export default function VoiceChatContainer() {
     console.log("🎙️ [handleFileUpload] VOICE MODE HANDLER CALLED!");
     if (!files || files.length === 0) return;
 
-    const file = files[0]; // Take first file only
+    // Convert to array
+    const newFiles = Array.from(files);
+    const file = newFiles[0]; // Take first file for type checking logic, but we'll process all
+
     console.log("📁 [handleFileUpload] File type:", file.type, "Name:", file.name);
 
     // Check if it's an image
@@ -495,9 +537,15 @@ export default function VoiceChatContainer() {
 
       // Switch to text mode and set pending images
       if (isVoiceMode) {
-        setIsVoiceMode(false);
+        toggleVoiceMode();
       }
-      setPendingImages([file]);
+
+      // Append new files to pending images (up to 4 total)
+      setPendingImages(prev => {
+        const remaining = 4 - prev.length;
+        const toAdd = newFiles.slice(0, remaining);
+        return [...prev, ...toAdd];
+      });
     } else {
       // Handle audio/video for voice mode
       const validTypes = [
@@ -510,7 +558,8 @@ export default function VoiceChatContainer() {
       if (validTypes.includes(file.type)) {
         const remainingSlots = 4 - voiceUploadedFiles.length;
         if (remainingSlots > 0) {
-          setVoiceUploadedFiles([...voiceUploadedFiles, file]);
+          const toAdd = newFiles.slice(0, remainingSlots);
+          setVoiceUploadedFiles([...voiceUploadedFiles, ...toAdd]);
         }
       }
     }
@@ -521,28 +570,30 @@ export default function VoiceChatContainer() {
     }
   };
 
-  const handleImageAnalysis = async (file: File, userMessage?: string) => {
-    console.log("🚀 [handleImageAnalysis] Starting image analysis for:", file.name);
+  const handleImageAnalysis = async (files: File[], userMessage?: string) => {
+    console.log("🚀 [handleImageAnalysis] Starting image analysis for files:", files.length);
     console.log("💬 [handleImageAnalysis] User message:", userMessage || "(none)");
+
+    setIsGenerating(true);
+
     try {
-      // Add user message with image preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageUrl = e.target?.result as string;
-        const userImageMessage: Message = {
-          id: Date.now().toString(),
-          text: userMessage || "What can you tell me about this image?",
-          isUser: true,
-          timestamp: new Date().toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-          }),
-          mediaUrl: imageUrl,
-          mediaType: "image",
-        };
-        setMessages((prev) => [...prev, userImageMessage]);
+      // Create preview URLs for all images
+      const mediaUrls = files.map(file => URL.createObjectURL(file));
+
+      // Add user message with image previews
+      const userImageMessage: Message = {
+        id: Date.now().toString(),
+        text: userMessage || "", // No default text - just empty if no message provided
+        isUser: true,
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        mediaUrls: mediaUrls,
+        mediaUrl: mediaUrls[0],
+        mediaType: "image",
       };
-      reader.readAsDataURL(file);
+      setMessages((prev) => [...prev, userImageMessage]);
 
       // Set thinking state
       setConversationState("thinking");
@@ -553,9 +604,9 @@ export default function VoiceChatContainer() {
         throw new Error("Not authenticated");
       }
 
-      // Call vision API
+      // Call vision API with ALL files
       const { analyzeImageWithVision } = await import("@/lib/guardianApi");
-      const response = await analyzeImageWithVision(file, token, userMessage, currentConversationId);
+      const response = await analyzeImageWithVision(files, token, userMessage, currentConversationId);
 
       // Store conversation ID if returned
       if (response.conversation_id && !currentConversationId) {
@@ -579,12 +630,18 @@ export default function VoiceChatContainer() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-      setConversationState("idle"); // Remove "Thinking..." immediately
+      // Keep thinking state visible until we start typing
+      // Don't set to idle yet - wait for typing to start
 
       // Type out the response character by character
       let currentIndex = 0;
       const typingInterval = setInterval(() => {
         if (currentIndex < fullText.length) {
+          // Set to idle on first character to remove "Thinking..."
+          if (currentIndex === 0) {
+            setConversationState("idle");
+          }
+
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantMessageId
@@ -597,9 +654,10 @@ export default function VoiceChatContainer() {
           clearInterval(typingInterval);
 
           // Speak response if voice mode and not muted (after typing completes)
-          if (isVoiceMode && !isMuted) {
+          if (isVoiceMode && !isMicMuted) {
             speak(fullText);
           }
+          setIsGenerating(false);
         }
       }, 10); // 10ms per character for faster typing
 
@@ -607,7 +665,7 @@ export default function VoiceChatContainer() {
       console.error("Error analyzing image:", error);
       const errorMessage: Message = {
         id: (Date.now() + 2).toString(),
-        text: `Sorry, I couldn't analyze the image: ${error instanceof Error ? error.message : "Unknown error"}`,
+        text: `Sorry, I couldn't analyze the images: ${error instanceof Error ? error.message : "Unknown error"}`,
         isUser: false,
         timestamp: new Date().toLocaleTimeString("en-US", {
           hour: "numeric",
@@ -616,6 +674,7 @@ export default function VoiceChatContainer() {
       };
       setMessages((prev) => [...prev, errorMessage]);
       setConversationState("idle");
+      setIsGenerating(false);
     }
   };
 
@@ -663,7 +722,7 @@ export default function VoiceChatContainer() {
       // For images: switch to text mode and add to pending images
       console.log("✅ [Drag&Drop] Image detected - switching to text mode");
       if (isVoiceMode) {
-        setIsVoiceMode(false);
+        toggleVoiceMode();
       }
       setPendingImages([file]);
     } else if (file.type === "application/pdf") {
@@ -705,21 +764,7 @@ export default function VoiceChatContainer() {
   };
 
   const handleToggleMode = () => {
-    const switchingToVoice = !isVoiceMode;
-    console.log("🔄 [handleToggleMode] Toggling mode", {
-      currentMode: isVoiceMode ? 'voice' : 'text',
-      switchingToVoice,
-    });
-
-    setIsVoiceMode(!isVoiceMode);
-
-    if (isListening) stopListening();
-
-    // Play greeting when switching to voice mode (should work now with garbage collection fix)
-    if (switchingToVoice && isSupported) {
-      console.log("🎤 [handleToggleMode] Playing greeting");
-      speak("How may I assist you?");
-    }
+    toggleVoiceMode();
   };
 
   return (
@@ -734,7 +779,7 @@ export default function VoiceChatContainer() {
       <header className="bg-white border-b border-[#E5E7EB] px-4 md:px-6 py-4 shadow-sm">
         <div className="w-full flex items-center justify-between">
           {/* Guardian Text */}
-          <h1 className="text-lg font-semibold text-[#1E3A8A]">Guardian</h1>
+          <h1 className="text-lg font-semibold text-[#1E3A8A]">GUARDIAN</h1>
 
           {/* Mode Toggle and Auth Buttons */}
           <div className="flex items-center gap-3">
@@ -885,6 +930,8 @@ export default function VoiceChatContainer() {
                       currentTranscript={transcript}
                       pendingImages={displayMessages.length === 0 ? pendingImages : []}
                       onPendingImagesChange={displayMessages.length === 0 ? setPendingImages : undefined}
+                      isGenerating={isGenerating}
+                      onStop={handleStop}
                     />
                   </div>
                 </div>
@@ -892,7 +939,7 @@ export default function VoiceChatContainer() {
                 <div className="space-y-4">
                   <AnimatePresence mode="popLayout">
                     {displayMessages
-                      .filter((message) => message.text || message.mediaUrl)
+                      .filter((message) => message.text || message.mediaUrl || (message.mediaUrls && message.mediaUrls.length > 0))
                       .map((message) => (
                         <motion.div
                           key={message.id}
@@ -902,7 +949,47 @@ export default function VoiceChatContainer() {
                           transition={{ duration: 0.15, ease: "easeOut" }}
                         >
                           {/* Media attachment - show first */}
-                          {message.mediaUrl && (
+                          {/* Media attachment - show first */}
+                          {(message.mediaUrls?.length || 0) > 0 ? (
+                            <div
+                              className={`mb-3 ${message.isUser
+                                ? "flex justify-end"
+                                : "flex justify-start"
+                                }`}
+                            >
+                              <div className={`grid gap-2 ${message.mediaUrls!.length > 1 ? "grid-cols-2 max-w-sm" : "max-w-xs"}`}>
+                                {message.mediaUrls!.map((url, idx) => (
+                                  <div
+                                    key={idx}
+                                    onClick={() => {
+                                      if (message.mediaType !== "video") {
+                                        setPreviewImage(url);
+                                      }
+                                    }}
+                                    className={`rounded-xl overflow-hidden shadow-md border border-[#E5E7EB] ${message.mediaType !== "video"
+                                      ? "cursor-pointer"
+                                      : ""
+                                      } ${message.mediaUrls!.length === 1 ? "w-full" : "aspect-square object-cover"}`}
+                                  >
+                                    {message.mediaType === "video" ? (
+                                      <video
+                                        src={url}
+                                        controls
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <img
+                                        src={url}
+                                        alt={`Shared media ${idx + 1}`}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : message.mediaUrl && (
+                            // Fallback for old messages or single mediaUrl
                             <div
                               className={`mb-3 ${message.isUser
                                 ? "flex justify-end"
@@ -936,32 +1023,34 @@ export default function VoiceChatContainer() {
                               </div>
                             </div>
                           )}
-                          {/* Text message bubble */}
-                          <div
-                            className={`flex w-full ${message.isUser ? "justify-end" : "justify-start"
-                              } mb-4`}
-                          >
+                          {/* Text message bubble - only show if there's text */}
+                          {message.text && (
                             <div
-                              className={`flex flex-col max-w-[80%] md:max-w-[70%] ${message.isUser ? "items-end" : "items-start"
-                                }`}
+                              className={`flex w-full ${message.isUser ? "justify-end" : "justify-start"
+                                } mb-4`}
                             >
                               <div
-                                className={`rounded-2xl px-5 py-3 shadow-sm ${message.isUser
-                                  ? "bg-linear-to-br from-[#3B82F6] to-[#60A5FA] text-white"
-                                  : "bg-white text-[#1E3A8A] border border-[#E5E7EB]"
+                                className={`flex flex-col max-w-[80%] md:max-w-[70%] ${message.isUser ? "items-end" : "items-start"
                                   }`}
                               >
-                                <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap wrap-break-word">
-                                  {message.text}
-                                </p>
+                                <div
+                                  className={`rounded-2xl px-5 py-3 shadow-sm ${message.isUser
+                                    ? "bg-linear-to-br from-[#3B82F6] to-[#60A5FA] text-white"
+                                    : "bg-white text-[#1E3A8A] border border-[#E5E7EB]"
+                                    }`}
+                                >
+                                  <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap wrap-break-word">
+                                    {message.text}
+                                  </p>
+                                </div>
+                                {message.timestamp && (
+                                  <span className="text-xs text-[#64748B] mt-1 px-2">
+                                    {message.timestamp}
+                                  </span>
+                                )}
                               </div>
-                              {message.timestamp && (
-                                <span className="text-xs text-[#64748B] mt-1 px-2">
-                                  {message.timestamp}
-                                </span>
-                              )}
                             </div>
-                          </div>
+                          )}
                         </motion.div>
                       ))}
 
@@ -1138,13 +1227,13 @@ export default function VoiceChatContainer() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleToggleMic}
-                  className={`p-5 rounded-full transition-all cursor-pointer shadow-md ${isMuted
-                    ? "bg-[#EF4444] text-white"
-                    : "bg-[#F1F5F9] text-[#1E3A8A] hover:bg-[#E2E8F0]"
-                    }`}
-                  aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
+                  className={`p-5 rounded-full transition-all cursor-pointer shadow-md ${isMicMuted
+                    ? "bg-red-500 text-white hover:bg-red-600 border-red-400"
+                    : "bg-white text-[#EF4444] hover:bg-red-50 border-[#E5E7EB]"
+                    } border`}
+                  aria-label={isMicMuted ? "Unmute microphone" : "Mute microphone"}
                 >
-                  {isMuted ? (
+                  {isMicMuted ? (
                     <svg
                       className="w-7 h-7"
                       fill="none"
@@ -1246,6 +1335,8 @@ export default function VoiceChatContainer() {
               currentTranscript={transcript}
               pendingImages={displayMessages.length > 0 ? pendingImages : []}
               onPendingImagesChange={displayMessages.length > 0 ? setPendingImages : undefined}
+              isGenerating={isGenerating}
+              onStop={handleStop}
             />
           )}
         </div>
