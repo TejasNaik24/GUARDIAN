@@ -16,7 +16,7 @@ export function VerticalSidebar({
   isExpanded,
   onToggle,
 }: VerticalSidebarProps) {
-  const { isGuest } = useAuth();
+  const { isGuest, user } = useAuth();
   const {
     createConversation,
     conversations,
@@ -30,7 +30,8 @@ export function VerticalSidebar({
     await createConversation();
   };
 
-  if (isGuest) return null;
+  // Only show sidebar for logged-in users
+  if (!user) return null;
 
   return (
     <motion.div

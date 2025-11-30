@@ -776,10 +776,17 @@ export default function VoiceChatContainer() {
       onDrop={handleDrop}
     >
       {/* Header */}
-      <header className="bg-white border-b border-[#E5E7EB] px-4 md:px-6 py-4 shadow-sm">
+      <header className="bg-white border-b border-[#E5E7EB] pl-2 pr-4 md:pr-6 py-2 shadow-sm">
         <div className="w-full flex items-center justify-between">
-          {/* Guardian Text */}
-          <h1 className="text-lg font-semibold text-[#1E3A8A]">GUARDIAN</h1>
+          {/* Guardian Text & Logo */}
+          <div className="flex items-center gap-1">
+            <img
+              src="/images/guardian-logo.png"
+              alt="GUARDIAN Logo"
+              className="w-[56px] h-[56px] object-contain"
+            />
+            <h1 className="text-lg font-semibold text-[#1E3A8A]">GUARDIAN</h1>
+          </div>
 
           {/* Mode Toggle and Auth Buttons */}
           <div className="flex items-center gap-3">
