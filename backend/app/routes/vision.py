@@ -4,7 +4,7 @@ from typing import Optional
 from app.services.gemini_service import GeminiService
 from app.services.rag_service import RAGService
 from app.services.conversation_service import ConversationService
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_user_optional
 from app.utils.logger import setup_logger
 import base64
 
@@ -28,7 +28,7 @@ async def analyze_image(
     files: list[UploadFile] = File(...),
     message: Optional[str] = Form(None),
     conversation_id: Optional[str] = Form(None),
-    current_user: dict = Depends(get_current_user)
+    current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     """
     Analyze medical images using Gemini Vision + RAG
@@ -95,7 +95,19 @@ async def analyze_image(
         else:
             # Create new conversation for this image analysis
             logger.info("✨ Creating new conversation for image analysis")
-            user_id = current_user.id
+            
+            # Handle guest users
+            if current_user:
+                user_id = current_user.id
+            else:
+                # Get or create the dedicated guest user
+                try:
+                    user_id = await conversation_service.get_or_create_guest_user()
+                    logger.info(f"👤 Using guest user ID: {user_id}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to get guest user: {str(e)}")
+                    raise HTTPException(status_code=500, detail="Failed to initialize guest session")
+
             conversation = await conversation_service.create_conversation(
                 user_id=user_id,
                 title="Image Analysis"

@@ -35,6 +35,25 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 
+async def get_current_user_optional(
+    authorization: Optional[str] = Header(None),
+    supabase: Client = Depends(get_supabase_client)
+) -> Optional[dict]:
+    """
+    Get current user if authenticated, otherwise return None
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    
+    token = authorization.replace("Bearer ", "")
+    
+    try:
+        user = supabase.auth.get_user(token)
+        return user.user
+    except Exception:
+        return None
+
+
 def get_settings_dependency() -> Settings:
     """Get application settings"""
     return get_settings()

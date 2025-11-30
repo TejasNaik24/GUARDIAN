@@ -381,7 +381,7 @@ export interface VisionResponse {
  */
 export async function analyzeImageWithVision(
   files: File[],
-  token: string,
+  token?: string,
   message?: string,
   conversationId?: string
 ): Promise<VisionResponse> {
@@ -399,12 +399,14 @@ export async function analyzeImageWithVision(
     formData.append("conversation_id", conversationId);
   }
 
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${BACKEND_URL}/api/vision/analyze`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      // Don't set Content-Type - browser will set it with boundary for multipart
-    },
+    headers,
     body: formData,
   });
 

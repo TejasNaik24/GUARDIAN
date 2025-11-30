@@ -598,11 +598,8 @@ export default function VoiceChatContainer() {
       // Set thinking state
       setConversationState("thinking");
 
-      // Get token
-      const token = session?.access_token;
-      if (!token) {
-        throw new Error("Not authenticated");
-      }
+      // Get token (optional for guest users)
+      const token = session?.access_token || undefined;
 
       // Call vision API with ALL files
       const { analyzeImageWithVision } = await import("@/lib/guardianApi");

@@ -220,3 +220,55 @@ class ConversationService:
         except Exception as e:
             logger.error(f"❌ Error generating title: {str(e)}")
             return "New Conversation"
+
+    async def get_or_create_guest_user(self) -> str:
+        """
+        Get or create a guest user for anonymous sessions
+        
+        Returns:
+            Guest user ID
+        """
+        email = "guest@guardian.ai"
+        # Use a consistent password or random one, doesn't matter as no one logs in as this user
+        password = "GuestUserSecurePassword123!" 
+        
+        try:
+            # Try to create user
+            # Note: create_user returns a UserResponse object usually
+            response = self.supabase.auth.admin.create_user({
+                "email": email,
+                "password": password,
+                "email_confirm": True
+            })
+            
+            # Handle different response structures depending on supabase version
+            user = getattr(response, 'user', None) or response
+            user_id = getattr(user, 'id', None)
+            
+            if user_id:
+                logger.info(f"✅ Created guest user: {user_id}")
+                return user_id
+            
+            raise Exception("Failed to get ID from created user")
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            if "already registered" in error_str or "unique constraint" in error_str:
+                logger.info("ℹ️ Guest user exists, retrieving ID...")
+                try:
+                    # List users to find the guest user
+                    # Note: This might be slow if there are many users, but robust for now
+                    response = self.supabase.auth.admin.list_users()
+                    users = getattr(response, 'users', []) or response
+                    
+                    for user in users:
+                        if getattr(user, 'email', '') == email:
+                            return getattr(user, 'id')
+                            
+                    raise Exception("Guest user exists but could not be found in list")
+                except Exception as inner_e:
+                    logger.error(f"❌ Error finding guest user: {str(inner_e)}")
+                    raise
+            
+            logger.error(f"❌ Error creating guest user: {str(e)}")
+            raise
