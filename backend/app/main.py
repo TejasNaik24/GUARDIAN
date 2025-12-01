@@ -2,6 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import health, chat, ingest, vision, account
+from app.api.agents import route as agents_route
 from app.utils.logger import setup_logger
 from app.config import get_settings
 
@@ -31,6 +32,7 @@ app.include_router(chat.router, prefix="/api", tags=["Chat"])
 app.include_router(ingest.router, prefix="/api", tags=["Ingest"])
 app.include_router(vision.router, prefix="/api", tags=["Vision"])
 app.include_router(account.router, prefix="/api/account", tags=["Account"])
+app.include_router(agents_route.router, prefix="/api/agents", tags=["Agents"])
 
 
 @app.on_event("startup")

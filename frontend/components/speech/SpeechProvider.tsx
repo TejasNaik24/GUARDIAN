@@ -7,7 +7,7 @@ import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognitio
 /**
  * Speech State Machine States
  */
-export type SpeechState = 'idle' | 'ready' | 'listening' | 'processing' | 'speaking' | 'error';
+export type SpeechState = 'idle' | 'ready' | 'listening' | 'processing' | 'speaking' | 'greeting' | 'error';
 
 /**
  * Error types
@@ -57,9 +57,9 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
 
     // Sync listening state to our internal state
     useEffect(() => {
-        if (listening && state !== 'speaking') {
+        if (listening && state !== 'speaking' && state !== 'greeting') {
             setState('listening');
-        } else if (!listening && isVoiceMode && state !== 'speaking') {
+        } else if (!listening && isVoiceMode && state !== 'speaking' && state !== 'greeting') {
             setState('ready');
         }
     }, [listening, isVoiceMode, state]);
@@ -75,57 +75,98 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
 
     const toggleVoiceMode = useCallback(async () => {
         const newVoiceMode = !isVoiceMode;
+        console.log(`🎤 [Speech] Toggling Voice Mode: ${newVoiceMode ? 'ON' : 'OFF'}`);
         setIsVoiceMode(newVoiceMode);
 
         if (newVoiceMode) {
             // Entering voice mode
-            setIsMicMuted(false);
+            // 1. Start muted
+            setIsMicMuted(true);
             resetTranscript();
 
-            // Stop mic before speaking
-            SpeechRecognition.stopListening();
-            setState('speaking');
-
-            // Ensure voices are loaded
-            let voices = window.speechSynthesis.getVoices();
-            if (voices.length === 0) {
-                await new Promise<void>((resolve) => {
-                    const onVoicesChanged = () => {
-                        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
-                        resolve();
-                    };
-                    window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
-                });
-                voices = window.speechSynthesis.getVoices();
+            // 2. Trigger permission by starting and immediately stopping
+            console.log("🎤 [Speech] Triggering mic permission...");
+            try {
+                await SpeechRecognition.startListening();
+                // Wait a bit longer to ensure the prompt has a chance to appear/register
+                setTimeout(() => {
+                    console.log("🎤 [Speech] Stopping mic after permission trigger");
+                    SpeechRecognition.stopListening();
+                }, 500);
+            } catch (e) {
+                console.error("❌ [Speech] Permission trigger failed", e);
             }
 
+            // 3. Play Greeting
+            console.log("🗣️ [Speech] Preparing greeting...");
+            setState('greeting');
+
+            // Robust Voice Loading
+            const loadVoices = (): Promise<SpeechSynthesisVoice[]> => {
+                return new Promise((resolve) => {
+                    let voices = window.speechSynthesis.getVoices();
+                    if (voices.length > 0) {
+                        resolve(voices);
+                        return;
+                    }
+
+                    console.log("⏳ [Speech] Waiting for voices...");
+                    const onVoicesChanged = () => {
+                        voices = window.speechSynthesis.getVoices();
+                        console.log(`✅ [Speech] Voices loaded: ${voices.length}`);
+                        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+                        resolve(voices);
+                    };
+
+                    window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
+
+                    // Fallback timeout in case voiceschanged never fires
+                    setTimeout(() => {
+                        voices = window.speechSynthesis.getVoices();
+                        console.log(`⚠️ [Speech] Voice load timeout. Voices found: ${voices.length}`);
+                        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+                        resolve(voices);
+                    }, 2000);
+                });
+            };
+
+            const voices = await loadVoices();
+
             // Create utterance
-            const utterance = new SpeechSynthesisUtterance("How may I assist you?");
+            const text = "How may I assist you?";
+            const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = "en-US";
 
             // Explicitly set an English voice if available (helps Chrome)
             const englishVoice = voices.find(v => v.lang.includes('en-US')) || voices.find(v => v.lang.includes('en'));
             if (englishVoice) {
                 utterance.voice = englishVoice;
+                console.log(`🗣️ [Speech] Using voice: ${englishVoice.name}`);
+            } else {
+                console.log("⚠️ [Speech] No English voice found, using default");
             }
 
+            utterance.onstart = () => console.log("🗣️ [Speech] Greeting started");
+
             utterance.onend = () => {
-                setState('listening');
-                try {
-                    SpeechRecognition.startListening({ continuous: true });
-                } catch (err) {
-                    console.error("Mic error:", err);
-                }
+                // 4. Stay muted (Idle) after greeting
+                console.log("✅ [Speech] Greeting completed. Staying muted.");
+                setState('idle'); // Idle = Muted/Static
+                SpeechRecognition.stopListening();
             };
+
+            utterance.onerror = (e) => console.error("❌ [Speech] Greeting TTS Error:", e);
 
             // Chrome fix: cancel then wait a tiny bit
             window.speechSynthesis.cancel();
             setTimeout(() => {
+                console.log("▶️ [Speech] Playing greeting...");
                 window.speechSynthesis.speak(utterance);
-            }, 50);
+            }, 100);
 
         } else {
             // Exiting voice mode
+            console.log("🛑 [Speech] Exiting voice mode");
             setIsMicMuted(true);
             setState('idle');
             window.speechSynthesis.cancel();
@@ -134,17 +175,21 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
     }, [isVoiceMode, resetTranscript]);
 
     const toggleMic = useCallback(() => {
-        if (listening) {
-            SpeechRecognition.stopListening();
-            setIsMicMuted(true);
-            setState('ready');
-        } else {
+        if (isMicMuted) {
+            // Unmute -> Start Listening
+            console.log("🎤 [Speech] Unmuting and starting listener");
             resetTranscript();
             SpeechRecognition.startListening({ continuous: true });
             setIsMicMuted(false);
             setState('listening');
+        } else {
+            // Mute -> Stop Listening
+            console.log("🔇 [Speech] Muting and stopping listener");
+            SpeechRecognition.stopListening();
+            setIsMicMuted(true);
+            setState('idle'); // Idle when muted
         }
-    }, [listening, resetTranscript]);
+    }, [isMicMuted, resetTranscript]);
 
     const cancelListening = useCallback(() => {
         SpeechRecognition.stopListening();
@@ -187,14 +232,17 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
 
             utterance.onend = () => {
                 console.log("✅ [Speech] TTS completed");
-                setState('listening');
-                // Resume listening if we are in voice mode
-                if (isVoiceMode) {
+
+                // Resume listening ONLY if we are in voice mode AND NOT MUTED
+                if (isVoiceMode && !isMicMuted) {
+                    setState('listening');
                     try {
                         SpeechRecognition.startListening({ continuous: true });
                     } catch (err) {
                         console.error("Mic error:", err);
                     }
+                } else {
+                    setState('idle');
                 }
                 resolve();
             };
