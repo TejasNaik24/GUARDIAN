@@ -106,6 +106,7 @@ Guardian follows a **Micro-Agent Architecture**:
 | **Auth** | Supabase Auth (Email/Password + Google OAuth) |
 | **Voice** | Web Speech API (STT), SpeechSynthesis (TTS) |
 | **Infrastructure** | Docker, Docker Compose |
+| **Deployment** | Render (Backend), Vercel (Frontend), Supabase (DB/Auth) |
 
 ---
 
@@ -158,6 +159,12 @@ npm run dev
 
 ## 🐳 Docker & Deployment
 
+### Live Deployment
+- **Frontend:** Deployed on **Vercel** (Global CDN, Edge Functions)
+- **Backend:** Deployed on **Render** (Auto-scaling Python Service)
+- **Database:** Managed by **Supabase** (PostgreSQL + pgvector)
+
+### Local Docker
 Run the entire stack with one command:
 
 ```bash
