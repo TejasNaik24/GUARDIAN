@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import HeroSection from "@/components/landing/HeroSection";
 import DemoVideoSection from "@/components/landing/DemoVideoSection";
 import FeaturesSection from "@/components/landing/FeaturesSection";
@@ -30,9 +31,18 @@ export default function LandingPage() {
     }
   };
 
+  const router = useRouter();
+
+  const handleStartChat = () => {
+    router.push("/chat");
+  };
+
   return (
     <div className="relative overflow-x-hidden bg-[#1E3A8A]">
-      <HeroSection scrollToSection={scrollToSection} />
+      <HeroSection
+        scrollToSection={scrollToSection}
+        onStartChat={handleStartChat}
+      />
       <DemoVideoSection />
       <FeaturesSection />
       <HowItWorksSection />
