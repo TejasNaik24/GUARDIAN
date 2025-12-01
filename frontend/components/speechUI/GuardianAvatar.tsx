@@ -109,26 +109,7 @@ export default function GuardianAvatar({ state, text }: GuardianAvatarProps) {
         className="relative z-10 w-64 h-64 flex items-center justify-center overflow-visible"
       >
 
-        {/* Thinking animation - rotating dots */}
-        {state === "thinking" && (
-          <div className="absolute inset-0 flex items-center justify-center z-20">
-            {[0, 1, 2].map((i) => (
-              <motion.div
-                key={i}
-                animate={{
-                  y: [-10, 10, -10],
-                  opacity: [1, 0.5, 1],
-                }}
-                transition={{
-                  duration: 1,
-                  repeat: Infinity,
-                  delay: i * 0.2,
-                }}
-                className="w-4 h-4 bg-[#3B82F6] rounded-full mx-1 shadow-md"
-              />
-            ))}
-          </div>
-        )}
+
 
         {/* Center logo - replace SVG with actual logo */}
         <div className="relative z-10 w-full h-full flex items-center justify-center">
@@ -154,7 +135,7 @@ export default function GuardianAvatar({ state, text }: GuardianAvatarProps) {
               {state === "idle" && "How may I assist you?"}
               {state === "listening" && "Listening..."}
               {state === "thinking" && (
-                <span className="animate-pulse">Analyzing...</span>
+                <span className="animate-pulse">Thinking...</span>
               )}
               {state === "speaking" && "Speaking..."}
             </>

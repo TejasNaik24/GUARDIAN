@@ -67,14 +67,40 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
         }
     }, [listening, isVoiceMode, state]);
 
-    // Handle transcript updates
+    // Silence detection timer
+    const silenceTimer = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Handle transcript updates & silence detection
     useEffect(() => {
-        if (transcript) {
-            // In continuous mode, the transcript keeps growing. 
-            // We might want to handle "final" results differently if needed, 
-            // but for now we just expose the raw transcript like the user's example.
+        if (transcript && state === 'listening') {
+            // Clear existing timer
+            if (silenceTimer.current) clearTimeout(silenceTimer.current);
+
+            // Set new timer to stop listening after silence
+            silenceTimer.current = setTimeout(() => {
+                console.log("🤫 [Speech] Silence detected, stopping listener...");
+                SpeechRecognition.stopListening();
+                // The stopListening call will trigger the 'listening' state change
+                // which VoiceChatContainer observes to send the message
+            }, 1500); // 1.5s silence threshold
         }
-    }, [transcript]);
+
+        return () => {
+            if (silenceTimer.current) clearTimeout(silenceTimer.current);
+        };
+    }, [transcript, state]);
+
+    // Chrome TTS "Resume Loop" Fix
+    // Chrome pauses TTS after ~15 seconds or if it gets stuck. This forces it to resume.
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
+                console.log("🔄 [Speech] Resuming paused TTS...");
+                window.speechSynthesis.resume();
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     const toggleVoiceMode = useCallback(async () => {
         const newVoiceMode = !isVoiceMode;
@@ -82,94 +108,74 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
         setIsVoiceMode(newVoiceMode);
 
         if (newVoiceMode) {
-            // Entering voice mode
-            // 1. Start muted
-            setIsMicMuted(true);
-            resetTranscript();
-
-            // 2. Trigger permission by starting and immediately stopping
-            // We await this sequence to ensure audio context is ready/cleared for TTS
-            console.log("🎤 [Speech] Triggering mic permission...");
+            // Safari Requirement: Trigger mic IMMEDIATELY on user click
+            // We can't await state updates or timeouts before this call
             try {
+                console.log("🎤 [Speech] Triggering mic permission (Safari optimized)...");
+                // Start listening immediately to trigger prompt
                 await SpeechRecognition.startListening();
-                await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
-                console.log("🎤 [Speech] Stopping mic after permission trigger");
-                await SpeechRecognition.stopListening();
+
+                // We need to stop it shortly after to reset for the greeting flow
+                // But we must ensure the prompt has had a chance to appear
+                setTimeout(() => {
+                    console.log("🎤 [Speech] Stopping mic after permission trigger");
+                    SpeechRecognition.stopListening();
+
+                    // Now proceed with the rest of the flow
+                    setIsMicMuted(true);
+                    resetTranscript();
+
+                    // Play Greeting
+                    console.log("🗣️ [Speech] Preparing greeting...");
+                    setState('greeting');
+
+                    const playGreeting = () => {
+                        const text = "How may I assist you?";
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        currentUtteranceRef.current = utterance;
+
+                        utterance.lang = "en-US";
+                        utterance.volume = 1.0;
+                        utterance.rate = 1.0;
+                        utterance.pitch = 1.0;
+
+                        const voices = window.speechSynthesis.getVoices();
+                        const englishVoice = voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en'));
+                        if (englishVoice) utterance.voice = englishVoice;
+
+                        utterance.onend = () => {
+                            console.log("✅ [Speech] Greeting completed. Staying muted.");
+                            currentUtteranceRef.current = null;
+                            setState('idle');
+                        };
+
+                        utterance.onerror = (e) => {
+                            console.error("❌ [Speech] Greeting TTS Error:", e);
+                            currentUtteranceRef.current = null;
+                            setState('idle');
+                        };
+
+                        console.log("▶️ [Speech] Playing greeting...");
+                        window.speechSynthesis.speak(utterance);
+                        window.speechSynthesis.resume();
+                    };
+
+                    // Check voices
+                    if (window.speechSynthesis.getVoices().length === 0) {
+                        window.speechSynthesis.onvoiceschanged = () => {
+                            window.speechSynthesis.onvoiceschanged = null;
+                            playGreeting();
+                        };
+                    } else {
+                        playGreeting();
+                    }
+
+                }, 500); // 500ms delay to allow permission prompt to register
+
             } catch (e) {
                 console.error("❌ [Speech] Permission trigger failed", e);
-            }
-
-            // 3. Play Greeting (Only after mic interaction is done)
-            console.log("🗣️ [Speech] Preparing greeting...");
-            setState('greeting');
-
-            const playGreeting = () => {
-                const text = "How may I assist you?";
-                const utterance = new SpeechSynthesisUtterance(text);
-
-                // Store in ref to prevent GC
-                currentUtteranceRef.current = utterance;
-
-                utterance.lang = "en-US";
-
-                // Simple voice selection
-                const voices = window.speechSynthesis.getVoices();
-                if (voices.length > 0) {
-                    const englishVoice = voices.find(v => v.lang.includes('en-US')) || voices.find(v => v.lang.includes('en'));
-                    if (englishVoice) utterance.voice = englishVoice;
-                }
-
-                utterance.onstart = () => console.log("🗣️ [Speech] Greeting started");
-                utterance.onend = () => {
-                    console.log("✅ [Speech] Greeting completed. Staying muted.");
-                    setState('idle');
-                    SpeechRecognition.stopListening();
-                    currentUtteranceRef.current = null; // Cleanup
-                };
-                utterance.onerror = (e) => {
-                    console.error("❌ [Speech] Greeting TTS Error:", e);
-                    currentUtteranceRef.current = null;
-                };
-
-                // Cancel any pending speech to clear queue
-                window.speechSynthesis.cancel();
-
-                // Small delay to ensure cancel takes effect
-                setTimeout(() => {
-                    console.log("▶️ [Speech] Playing greeting...");
-                    window.speechSynthesis.speak(utterance);
-                }, 50);
-            };
-
-            // Retry if voices aren't loaded yet (Chrome quirk)
-            if (window.speechSynthesis.getVoices().length === 0) {
-                console.log("⏳ [Speech] Voices not loaded, waiting...");
-
-                let hasPlayed = false;
-                let fallbackTimer: NodeJS.Timeout;
-
-                const cleanup = () => {
-                    hasPlayed = true;
-                    window.speechSynthesis.onvoiceschanged = null;
-                    if (fallbackTimer) clearTimeout(fallbackTimer);
-                };
-
-                window.speechSynthesis.onvoiceschanged = () => {
-                    if (hasPlayed) return;
-                    console.log("✅ [Speech] Voices changed, playing greeting");
-                    cleanup();
-                    playGreeting();
-                };
-
-                // Fallback if event doesn't fire
-                fallbackTimer = setTimeout(() => {
-                    if (hasPlayed) return;
-                    console.log("⚠️ [Speech] Voice load timeout, playing anyway");
-                    cleanup();
-                    playGreeting();
-                }, 1000);
-            } else {
-                playGreeting();
+                // Still enter voice mode even if trigger failed (user might have already granted)
+                setIsMicMuted(true);
             }
 
         } else {
@@ -230,16 +236,29 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
             }
 
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = "en-US";
+            // Store in ref to prevent GC
+            currentUtteranceRef.current = utterance;
 
-            // Explicitly set an English voice if available
-            const englishVoice = voices.find(v => v.lang.includes('en-US')) || voices.find(v => v.lang.includes('en'));
+            utterance.lang = "en-US";
+            utterance.volume = 1.0;
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+
+            // Simplified voice selection for Chrome stability
+            const englishVoice = voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en'));
+
             if (englishVoice) {
+                // On Chrome, sometimes setting the voice object explicitly causes silence if the object is stale.
+                // We'll try setting it, but if it fails, the default might work better.
                 utterance.voice = englishVoice;
+                console.log(`🗣️ [Speech] Selected voice: ${englishVoice.name}`);
+            } else {
+                console.log("⚠️ [Speech] Using system default voice");
             }
 
             utterance.onend = () => {
                 console.log("✅ [Speech] TTS completed");
+                currentUtteranceRef.current = null;
 
                 // Resume listening ONLY if we are in voice mode AND NOT MUTED
                 if (isVoiceMode && !isMicMuted) {
@@ -257,17 +276,17 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
 
             utterance.onerror = (e) => {
                 console.error("❌ [Speech] TTS error:", e);
-                setState('ready');
+                currentUtteranceRef.current = null;
+                setState('idle'); // Ensure we reset to idle on error
                 resolve(); // Resolve anyway to not block
             };
 
-            // Chrome fix: cancel then wait a tiny bit
-            window.speechSynthesis.cancel();
-            setTimeout(() => {
-                window.speechSynthesis.speak(utterance);
-            }, 50);
+            // Direct speak without cancel to avoid 'canceled' errors
+            console.log(`🔊 [Speech] Speaking: "${text.substring(0, 20)}..."`);
+            window.speechSynthesis.speak(utterance);
+            window.speechSynthesis.resume(); // Ensure not paused
         });
-    }, [isVoiceMode]);
+    }, [isVoiceMode, isMicMuted]);
 
     const clearError = useCallback(() => setError(null), []);
 

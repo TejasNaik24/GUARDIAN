@@ -535,28 +535,11 @@ export default function VoiceChatContainer({ onSidebarToggle }: VoiceChatContain
     const isImage = imageTypes.includes(file.type);
     console.log("🖼️ [handleFileUpload] Is image?", isImage);
 
-    if (isImage) {
-      // For images: switch to text mode and add to pending images
-      console.log("✅ [handleFileUpload] Image detected - switching to text mode");
-
-      // Switch to text mode and set pending images
-      if (isVoiceMode) {
-        toggleVoiceMode();
-      }
-
-      // Append new files to pending images (up to 4 total)
-      setPendingImages(prev => {
-        const remaining = 4 - prev.length;
-        const toAdd = newFiles.slice(0, remaining);
-        return [...prev, ...toAdd];
-      });
-    } else {
-      // Handle audio/video for voice mode
+    if (isVoiceMode) {
+      // In Voice Mode: Add to voiceUploadedFiles (images, audio, video)
       const validTypes = [
-        "video/mp4",
-        "audio/mpeg",
-        "audio/mp3",
-        "audio/wav",
+        "image/jpeg", "image/jpg", "image/png", "image/heic", "image/webp",
+        "video/mp4", "audio/mpeg", "audio/mp3", "audio/wav"
       ];
 
       if (validTypes.includes(file.type)) {
@@ -565,6 +548,22 @@ export default function VoiceChatContainer({ onSidebarToggle }: VoiceChatContain
           const toAdd = newFiles.slice(0, remainingSlots);
           setVoiceUploadedFiles([...voiceUploadedFiles, ...toAdd]);
         }
+      }
+    } else {
+      // In Text Mode: Handle images vs others
+      if (isImage) {
+        // Append new files to pending images (up to 4 total)
+        setPendingImages(prev => {
+          const remaining = 4 - prev.length;
+          const toAdd = newFiles.slice(0, remaining);
+          return [...prev, ...toAdd];
+        });
+      } else {
+        // Handle other types for text mode if needed (currently logic was split)
+        // For now, let's assume text mode mainly handles images via pendingImages
+        // If we want to support video/audio in text mode, we'd need a similar state or reuse pendingImages
+        // But the original code only had pendingImages for images.
+        // Let's keep it simple and consistent with previous behavior for text mode.
       }
     }
 
@@ -758,8 +757,8 @@ export default function VoiceChatContainer({ onSidebarToggle }: VoiceChatContain
 
   const handleSendVoiceFiles = () => {
     if (voiceUploadedFiles.length > 0) {
-      // Send with first file for now (backend will be updated later for multiple)
-      handleVoiceSendMessage("Uploaded media", voiceUploadedFiles[0]);
+      // Send all files
+      handleVoiceSendMessage("Uploaded media", voiceUploadedFiles);
       setVoiceUploadedFiles([]);
     }
   };
