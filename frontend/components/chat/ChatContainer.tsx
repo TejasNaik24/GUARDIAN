@@ -1,3 +1,22 @@
+/**
+ * ChatContainer.tsx
+ * =================
+ * 
+ * This component renders the standard Text Mode chat interface.
+ * It is designed for users who prefer typing or are in a noisy environment.
+ * 
+ * Features:
+ * - **Message History:** Renders a scrollable list of user and AI messages.
+ * - **Markdown Support:** Renders rich text (bold, lists, code blocks) in AI responses.
+ * - **Auto-Scroll:** Automatically scrolls to the newest message.
+ * - **Input Area:** Standard text input with file attachment capabilities.
+ * 
+ * It shares the same underlying `useChat` hook as the Voice Mode to ensure
+ * conversation state is preserved when switching modes.
+ * 
+ * @author Tejas Naik
+ */
+
 "use client";
 
 import { useState, useEffect, useRef } from "react";

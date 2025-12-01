@@ -1,3 +1,24 @@
+/**
+ * VoiceChatContainer.tsx
+ * ======================
+ * 
+ * This is the core component for the Voice Mode interface of Guardian.
+ * It handles the real-time, hands-free conversational experience.
+ * 
+ * Key Features:
+ * 1.  **Web Speech API Integration:** Uses `SpeechRecognition` for STT and `SpeechSynthesis` for TTS.
+ * 2.  **Voice Activity Detection (VAD):** Automatically detects when the user stops speaking to send the message.
+ * 3.  **Visual Feedback:** Displays a dynamic audio visualizer (orb) that reacts to speech volume.
+ * 4.  **Hybrid Input:** Allows users to switch between voice and text modes seamlessly.
+ * 5.  **Image Upload:** Supports uploading images for vision analysis directly within the voice flow.
+ * 
+ * State Management:
+ * - Uses `SpeechProvider` context for global voice state (listening, speaking, processing).
+ * - Manages local conversation history and UI states (isPanelOpen, etc.).
+ * 
+ * @author Tejas Naik
+ */
+
 "use client";
 
 import { useState, useEffect, useRef } from "react";

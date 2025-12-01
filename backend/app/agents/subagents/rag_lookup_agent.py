@@ -1,3 +1,20 @@
+"""
+RAG Lookup Agent (Retrieval-Augmented Generation)
+=================================================
+
+The `RAGLookupAgent` is the researcher of the team. When a query requires specific, verified medical facts
+(e.g., "What is the dosage for Ibuprofen?"), this agent consults the knowledge base.
+
+**Workflow:**
+1.  **Embed Query:** Converts the user's question into a vector embedding.
+2.  **Vector Search:** Queries Supabase `pgvector` to find the most relevant document chunks.
+3.  **Synthesize:** Uses the retrieved context to answer the question accurately.
+
+This grounding mechanism significantly reduces hallucinations and ensures advice is based on authoritative sources.
+
+Author: Tejas Naik
+"""
+
 from typing import List, Dict, Any
 from app.agents.agent_base import AgentBase, AgentRequest, AgentResponse
 from app.services.rag_service import RAGService

@@ -1,4 +1,21 @@
-from typing import List, Dict, Any
+"""
+Guardian Agent Router
+=====================
+
+The `AgentRouter` is the central "dispatcher" of the Guardian system. It analyzes every incoming user query
+and determines which specialized agent is best suited to handle it.
+
+**How it works:**
+1.  **Analysis:** Uses Gemini 1.5 Pro to classify the user's intent (e.g., "Medical Emergency", "General Health Question", "Safety Issue").
+2.  **Routing:** Maps the intent to a specific sub-agent (e.g., `TriageAgent`, `FirstAidAgent`, `SafetyAgent`).
+3.  **Fallback:** Handles unclear or out-of-scope queries gracefully.
+
+This ensures that a pediatric question goes to the `PediatricAgent` and a wound image goes to the `ImageAnalysisAgent`.
+
+Author: Tejas Naik
+"""
+
+from typing import Dict, Any, List, Optional
 import json
 from app.agents.agent_base import AgentRequest
 from app.services.llm_client import llm_client

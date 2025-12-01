@@ -1,4 +1,21 @@
 from typing import List, Dict, Any
+"""
+Image Analysis Agent (Vision)
+=============================
+
+The `ImageAnalysisAgent` gives Guardian its "eyes". It uses the multimodal capabilities of Gemini 1.5 Pro
+to analyze uploaded medical images.
+
+**Capabilities:**
+- **Wound Assessment:** Analyzes cuts, burns, and rashes for severity and infection signs.
+- **Medication Identification:** Reads labels on pill bottles or blisters.
+- **Visual Triage:** Detects visible signs of trauma (swelling, deformity).
+
+**Privacy:** Images are processed in-memory and not permanently stored unless explicitly saved for the user's record.
+
+Author: Tejas Naik
+"""
+
 import base64
 import json
 from app.agents.agent_base import AgentBase, AgentRequest, AgentResponse

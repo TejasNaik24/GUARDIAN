@@ -1,3 +1,20 @@
+"""
+Pediatric Agent
+===============
+
+The `PediatricAgent` is a specialized module for handling medical queries regarding children and infants.
+Children are not just "small adults"—they have unique physiological ranges, symptoms, and risks.
+
+**Specializations:**
+- **Dosage Safety:** Checks for age/weight-appropriate medication guidelines (avoids Aspirin for kids).
+- **Red Flag Detection:** Identifies pediatric-specific danger signs (e.g., lethargy, dehydration, high fever).
+- **Tone Adjustment:** Uses a calm, reassuring tone suitable for worried parents.
+
+**Safety:** Automatically escalates to emergency care for high-risk symptoms in infants.
+
+Author: Tejas Naik
+"""
+
 from typing import List, Dict, Any
 import json
 from app.agents.agent_base import AgentBase, AgentRequest, AgentResponse

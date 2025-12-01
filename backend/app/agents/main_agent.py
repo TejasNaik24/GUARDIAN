@@ -1,8 +1,28 @@
+"""
+Guardian Main Orchestrator
+==========================
+
+The `MainAgent` is the conductor of the entire multi-agent symphony. It coordinates the workflow between
+the user, the `AgentRouter`, and the specialized sub-agents.
+
+**Workflow:**
+1.  **Receive Query:** Accepts user input (text/voice) and optional image data.
+2.  **Safety Check:** Runs a preliminary check with `SafetyAgent` to block harmful content immediately.
+3.  **Route:** Uses `AgentRouter` to select the best expert for the job.
+4.  **Execute:** Calls the selected sub-agent (e.g., `FirstAidAgent`) to generate a response.
+5.  **Synthesize:** Formats the final response, ensuring empathy and clarity.
+
+This class ensures a cohesive experience, hiding the complexity of multiple agents from the user.
+
+Author: Tejas Naik
+"""
+
 from typing import List, Dict, Any
 import asyncio
 import uuid
 import time
 import json
+import logging
 
 from app.agents.agent_base import AgentRequest, AgentResponse
 from app.agents.router import router

@@ -1,4 +1,23 @@
-from typing import List, Dict, Any
+"""
+Triage Agent
+============
+
+The `TriageAgent` is responsible for the initial assessment of a medical situation. Its primary goal is to
+determine the urgency level and recommend the appropriate level of care.
+
+**Capabilities:**
+- **Urgency Classification:**
+    - 🔴 **Red (Critical):** Immediate life threat (e.g., severe bleeding, difficulty breathing). Call 911.
+    - 🟡 **Yellow (Urgent):** Serious but not immediately life-threatening. Visit ER/Urgent Care.
+    - 🟢 **Green (Non-Urgent):** Can be managed at home or with a regular doctor visit.
+- **Protocol Matching:** Matches symptoms against standard triage protocols.
+
+**Note:** This agent errs on the side of caution (over-triage) to ensure patient safety.
+
+Author: Tejas Naik
+"""
+
+from typing import Dict, Any
 import json
 from app.agents.agent_base import AgentBase, AgentRequest, AgentResponse
 from app.services.llm_client import llm_client

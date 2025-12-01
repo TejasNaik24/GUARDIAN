@@ -1,4 +1,21 @@
-from typing import List, Dict, Any
+"""
+First Aid Agent
+===============
+
+The `FirstAidAgent` provides step-by-step, actionable instructions for managing injuries and sudden illnesses
+until professional help arrives.
+
+**Features:**
+- **Step-by-Step Guides:** Clear, numbered instructions (e.g., "Apply pressure", "Elevate the limb").
+- **Do's and Don'ts:** Highlights critical actions to avoid (e.g., "Do not remove embedded objects").
+- **RAG Integration:** Can consult the medical knowledge base for specific procedures (e.g., CPR steps).
+
+It focuses on immediate stabilization and preventing further harm.
+
+Author: Tejas Naik
+"""
+
+from typing import Dict, Any
 import json
 from app.agents.agent_base import AgentBase, AgentRequest, AgentResponse
 from app.services.llm_client import llm_client

@@ -1,3 +1,21 @@
+/**
+ * SpeechProvider.tsx
+ * ==================
+ * 
+ * A global React Context provider that manages the state of the Web Speech API.
+ * It acts as a bridge between the browser's native speech capabilities and the React UI.
+ * 
+ * Responsibilities:
+ * 1.  **Speech Recognition (STT):** Handles microphone access, continuous listening, and transcript generation.
+ * 2.  **Speech Synthesis (TTS):** Manages text-to-speech playback, voices, and cancellation.
+ * 3.  **Browser Compatibility:** Handles Chrome-specific quirks (like the "speech synthesis cancel" bug).
+ * 4.  **State Exposure:** Provides hooks (`useSpeech`) for components to access `isListening`, `isSpeaking`, etc.
+ * 
+ * This abstraction allows any component in the app to become voice-enabled easily.
+ * 
+ * @author Tejas Naik
+ */
+
 "use client";
 
 import React, { createContext, useState, useCallback, useEffect } from 'react';
