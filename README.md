@@ -6,7 +6,7 @@
 
 > **Guardian** is an advanced, multi-agent AI system designed to provide real-time, voice-activated emergency medical triage and first aid guidance. It combines the power of Google Gemini, RAG (Retrieval-Augmented Generation), and computer vision to assist users in critical situations.
 
-**[Watch the Demo Video](#)** *(Link placeholder)*
+**Check out the project [here!](https://guardian-lac-phi.vercel.app/)**
 
 ---
 
