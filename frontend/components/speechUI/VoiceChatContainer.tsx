@@ -317,7 +317,7 @@ export default function VoiceChatContainer({ onSidebarToggle }: VoiceChatContain
         setConversationState("idle");
 
         // Speak response
-        if (isVoiceMode && !isMicMuted) {
+        if (isVoiceMode) {
           speak(fullText);
         }
 
