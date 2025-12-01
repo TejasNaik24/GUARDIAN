@@ -233,3 +233,39 @@ Guardian is an AI-powered tool for educational and research purposes only. It do
 ## 📄 License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+### Backend Architecture Diagram
+
+```mermaid
+graph TD
+  U[User] --> API[API Endpoint]
+  API --> O[Main Orchestrator (Router)]
+  O --> RAG[RAGLookupAgent]
+  O --> IMG[ImageAnalysisAgent]
+  O --> SYM[SymptomsAgent]
+  O --> TRI[TriageAgent]
+  O --> FA[FirstAidAgent]
+  O --> PED[PediatricAgent]
+  O --> SAF[SafetyAgent]
+
+  RAG --> VDB[Vector DB (Supabase / pgvector)]
+  RAG --> META[Supabase Metadata]
+  IMG --> IMGPROC[Image Processing Tool]
+  IMG --> GEM[Gemini Model]
+  SYM --> SYMEXT[Symptom Extraction Tool]
+  TRI --> TRIAGE[Triage Rules DB]
+  FA --> VDB
+  PED --> VDB
+  SAF --> META
+
+  RAG --> O
+  IMG --> O
+  SYM --> O
+  TRI --> O
+  FA --> O
+  PED --> O
+  SAF --> O
+
+  O --> GEM
+  GEM --> U
+```

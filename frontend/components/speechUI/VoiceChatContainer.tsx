@@ -630,18 +630,16 @@ export default function VoiceChatContainer({ onSidebarToggle }: VoiceChatContain
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-      // Keep thinking state visible until we start typing
-      // Don't set to idle yet - wait for typing to start
+
+      // Speak response IMMEDIATELY if voice mode
+      if (isVoiceMode) {
+        speak(fullText);
+      }
 
       // Type out the response character by character
       let currentIndex = 0;
       const typingInterval = setInterval(() => {
         if (currentIndex < fullText.length) {
-          // Set to idle on first character to remove "Thinking..."
-          if (currentIndex === 0) {
-            setConversationState("idle");
-          }
-
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantMessageId
@@ -652,11 +650,6 @@ export default function VoiceChatContainer({ onSidebarToggle }: VoiceChatContain
           currentIndex++;
         } else {
           clearInterval(typingInterval);
-
-          // Speak response if voice mode and not muted (after typing completes)
-          if (isVoiceMode && !isMicMuted) {
-            speak(fullText);
-          }
           setIsGenerating(false);
         }
       }, 10); // 10ms per character for faster typing

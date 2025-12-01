@@ -150,7 +150,11 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
                         };
 
                         utterance.onerror = (e) => {
-                            console.error("❌ [Speech] Greeting TTS Error:", e);
+                            if (e.error === 'canceled' || e.error === 'interrupted') {
+                                console.log("ℹ️ [Speech] Greeting TTS canceled (expected)");
+                            } else {
+                                console.error("❌ [Speech] Greeting TTS Error:", e);
+                            }
                             currentUtteranceRef.current = null;
                             setState('idle');
                         };
