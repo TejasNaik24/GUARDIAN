@@ -11,7 +11,8 @@ export default function TypingIndicator() {
       className="flex justify-start mb-4"
     >
       <div className="bg-[#E5E7EB] rounded-2xl px-5 py-3 shadow-sm">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-[#64748B]">Thinking</span>
           {[0, 1, 2].map((index) => (
             <motion.div
               key={index}

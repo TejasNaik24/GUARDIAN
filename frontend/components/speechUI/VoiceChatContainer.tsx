@@ -366,8 +366,9 @@ export default function VoiceChatContainer({ onSidebarToggle }: VoiceChatContain
       currentConversationId,
       (chunk: string) => {
         streamingContentRef.current += chunk;
+        // Hide "Thinking..." indicator as soon as first chunk arrives
         if (streamingContentRef.current.length > 0 && conversationState === "thinking") {
-          // switch state if needed
+          setConversationState("idle");
         }
       },
       (status: string) => {
