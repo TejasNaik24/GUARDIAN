@@ -653,6 +653,9 @@ export default function VoiceChatContainer({ onSidebarToggle }: VoiceChatContain
 
       setMessages((prev) => [...prev, assistantMessage]);
 
+      // Hide "Thinking" indicator as soon as we start typing
+      setConversationState("idle");
+
       // Speak response IMMEDIATELY if voice mode
       if (isVoiceMode) {
         speak(fullText);
@@ -672,6 +675,7 @@ export default function VoiceChatContainer({ onSidebarToggle }: VoiceChatContain
           currentIndex++;
         } else {
           clearInterval(typingInterval);
+          setConversationState("idle");
           setIsGenerating(false);
         }
       }, 10); // 10ms per character for faster typing
