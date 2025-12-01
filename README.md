@@ -1,271 +1,334 @@
-<p align="center">
-  <img src="https://placehold.co/200x60?text=Guardian+Logo" alt="Guardian Logo" height="60" />
-</p>
+# Guardian AI - Emergency Medical Assistant
 
-# Guardian
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Status](https://img.shields.io/badge/status-production--ready-success)
 
-> **Kaggle × Google AI Intensive 2025 Capstone Project**
+> **Guardian** is an advanced, multi-agent AI system designed to provide real-time, voice-activated emergency medical triage and first aid guidance. It combines the power of Google Gemini, RAG (Retrieval-Augmented Generation), and computer vision to assist users in critical situations.
 
----
-
-## 🩺 Overview
-
-**Guardian** is an advanced AI-powered medical triage agent designed for emergency scenarios. Leveraging a two-layer LLM RAG architecture, Guardian accepts text, images, and videos as input, retrieves relevant information from trusted medical sources, and provides realistic triage recommendations. The system is built for rapid, reliable, and multimodal decision support in critical situations.
+**[Watch the Demo Video](#)** *(Link placeholder)*
 
 ---
 
-## 🚀 Features
+## 📸 Architecture & Design
 
-- **Multimodal Input:** Accepts text, images, and video for comprehensive triage.
-- **Realistic Emergency Triage:** Provides actionable, context-aware recommendations for medical emergencies.
-- **RAG-Powered Retrieval:** Uses ChromaDB to search and retrieve information from vetted medical sources.
-- **Trusted Medical Sources:** Integrates with Supabase to store and manage medical documents and logs.
-- **Full-Stack Deployment:** Seamless integration between frontend (Vercel) and backend (Render).
-- **User-Friendly Interface:** Modern, responsive UI for fast and intuitive triage submissions.
+![System Architecture](docs/system_architecture_overview.png)
+*System Architecture Overview*
+
+![Sub-Agent Architecture](docs/sub_agent_architecture_diagram.png)
+*Multi-Agent Reasoning Flow*
+
+> **Note:** High-resolution diagrams are available in the `/docs` folder.
+
+---
+
+## 📚 Table of Contents
+
+- [Problem Statement](#-problem-statement)
+- [Why Agents?](#-why-agents)
+- [Key Features](#-key-features-what-i-built)
+- [Architecture](#-architecture)
+- [Tech Stack](#-tech-stack)
+- [Quick Start](#-quick-start)
+- [Docker & Deployment](#-docker--deployment)
+- [Supabase Setup](#-supabase-setup--migrations)
+- [API Reference](#-api-reference)
+- [Ingestion & RAG](#-ingestion--rag)
+- [Authentication](#-authentication--session-management)
+- [Agents & Routing](#-agents--routing)
+- [Testing & Troubleshooting](#-testing--troubleshooting)
+- [Security & Compliance](#-security--compliance)
+- [Kaggle Submission](#-kaggle-submission-checklist)
+- [License](#-license)
+
+---
+
+## 🚨 Problem Statement
+
+In medical emergencies, every second counts. Panic, lack of knowledge, and delay in professional help can lead to severe outcomes. Existing AI chatbots often hallucinate, lack real-time voice interaction, or cannot process visual cues (like a wound image).
+
+**Guardian solves this by providing:**
+1.  **Instant Voice Triage:** Hands-free interaction for emergencies.
+2.  **Visual Analysis:** "Eyes" to see injuries via computer vision.
+3.  **Grounded Knowledge:** RAG system backed by authoritative medical manuals.
+4.  **Safety First:** Strict guardrails to prevent harmful advice.
+
+---
+
+## 🤖 Why Agents?
+
+A single LLM prompt is insufficient for complex medical reasoning. Guardian uses a **Multi-Agent System** where specialized agents collaborate:
+
+- **Router Agent:** The "dispatcher" that understands intent.
+- **Triage Agent:** Assesses urgency (Red/Yellow/Green).
+- **Vision Agent:** Analyzes uploaded images.
+- **RAG Agent:** Fetches verified medical protocols.
+- **Safety Agent:** The "supervisor" ensuring no harmful output.
+
+This architecture ensures **accuracy, safety, and specialized expertise** that a generic model cannot match.
+
+---
+
+## ✨ Key Features (What I Built)
+
+- **🗣️ Real-Time Voice Mode:** Full-duplex voice conversation with auto-silence detection and interruptibility.
+- **👁️ Computer Vision:** Upload images (X-rays, wounds, medication) for instant analysis.
+- **🧠 Multi-Agent Orchestration:** 7+ specialized sub-agents working in parallel.
+- **📚 RAG (Retrieval-Augmented Generation):** Ingests PDFs/text into Supabase pgvector for grounded answers.
+- **🔐 Robust Authentication:** Full login/signup system with Guest Mode for instant access.
+- **💾 Conversation Memory:** Persistent chat history stored in Supabase.
+- **⚡ Hybrid AI Engine:** Uses **Google Gemini 1.5 Pro** for reasoning and **Flash** for speed.
+- **🐳 Dockerized:** Full container support for easy deployment.
 
 ---
 
 ## 🏗️ Architecture
 
-Guardian is composed of several tightly integrated components:
+Guardian follows a **Micro-Agent Architecture**:
 
-- **Frontend (Next.js):**
-  - Built with React, TypeScript, Tailwind CSS, and Framer Motion for a modern, animated user experience.
-  - Handles user authentication, triage form submission, and media uploads.
-- **Backend (FastAPI):**
-  - Python-based API using FastAPI and Uvicorn for high performance.
-  - Integrates Google ADK LLM for advanced language and vision capabilities.
-  - Implements RAG (Retrieval-Augmented Generation) using ChromaDB for vector search.
-  - Supabase for storing medical sources and logging triage events.
-- **RAG Engine:**
-  - Vectorizes queries and medical documents for semantic search.
-  - Retrieves contextually relevant information to support LLM responses.
-- **Google ADK Integration:**
-  - Multimodal LLM for text, image, and video analysis.
-  - Provides robust reasoning and medical knowledge.
-- **Multimodal Input Pipeline:**
-  - Accepts and preprocesses text, images, and video.
-  - Extracts frames and features for analysis.
+1.  **Frontend (Next.js):** Handles voice processing (Web Speech API), UI state, and real-time streaming.
+2.  **Backend (FastAPI):** Orchestrates the agent workflow.
+3.  **Router:** Classifies the query (e.g., "I cut my finger" -> First Aid Agent).
+4.  **Sub-Agents:** Execute specific tasks (Lookup RAG, Analyze Image, Check Safety).
+5.  **Reasoner:** Synthesizes all agent outputs into a final, empathetic response.
+6.  **Database (Supabase):** Stores user profiles, chat history, and vector embeddings.
 
 ---
 
-## 🧑‍💻 Tech Stack
+## 🛠️ Tech Stack
 
-- **Frontend:** Next.js, React, TypeScript, Tailwind CSS, Framer Motion
-- **Backend:** Python, FastAPI, Uvicorn, Supabase, Google ADK, ChromaDB
-- **AI:** Google ADK LLM (multimodal), RAG (ChromaDB)
-- **Database:** Supabase (PostgreSQL)
-- **Deployment:** Vercel (frontend), Render (backend)
+| Component | Technology |
+| :--- | :--- |
+| **Frontend** | Next.js 14 (App Router), TypeScript, Tailwind CSS, Framer Motion |
+| **Backend** | Python, FastAPI, Uvicorn |
+| **AI Models** | Google Gemini 1.5 Pro (Reasoning), Gemini 1.5 Flash (Speed) |
+| **Vector DB** | Supabase (PostgreSQL + pgvector) |
+| **Auth** | Supabase Auth (Email/Password + Google OAuth) |
+| **Voice** | Web Speech API (STT), SpeechSynthesis (TTS) |
+| **Infrastructure** | Docker, Docker Compose |
 
 ---
 
-## ⚡ Getting Started / Installation
+## 🚀 Quick Start
 
 ### Prerequisites
+- Node.js 18+
+- Python 3.11+
+- Docker (optional)
+- Supabase Account
+- Google AI Studio Key
 
-- Node.js & npm (for frontend)
-- Python 3.10+ (for backend)
-- Supabase account & API keys
-- Google ADK API key
-
-### Backend Setup
-
+### 1. Clone the Repository
 ```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+git clone https://github.com/TejasNaik24/GUARDIAN.git
+cd GUARDIAN
 ```
 
-### Frontend Setup
+### 2. Backend Setup
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
 
+# Create .env file
+cp .env.example .env
+# Edit .env and add your API keys (see Environment Variables section)
+
+# Run Server
+uvicorn app.main:app --reload
+```
+*Backend runs on `http://localhost:8000`*
+
+### 3. Frontend Setup
 ```bash
 cd frontend
 npm install
+
+# Create .env.local file
+cp .env.local.example .env.local
+# Edit .env.local with Supabase keys
+
+# Run Client
 npm run dev
 ```
+*Frontend runs on `http://localhost:3000`*
 
 ---
 
-## 📝 Usage
+## 🐳 Docker & Deployment
 
-1. **Access the Guardian UI** via the frontend (Next.js app).
-2. **Submit a triage request**:
-   - Fill out the form with patient symptoms (text).
-   - Optionally upload images (e.g., wounds, scans) or video (e.g., accident footage).
-3. **Receive recommendations**:
-   - Guardian analyzes the input using LLM and RAG.
-   - Returns triage suggestions and relevant medical information.
+Run the entire stack with one command:
 
----
-
-## 📁 Project Structure
-
-- `frontend/` – Next.js app for user interface
-- `backend/` – FastAPI backend with ADK and RAG
-- `README.md` – Project documentation
-
-**Backend Structure:**
-
-- `app/` – FastAPI app, routes, models, services
-- `tests/` – Unit and integration tests
-- `requirements.txt` – Python dependencies
-- `Dockerfile` – Containerization for deployment
-
-**Frontend Structure:**
-
-- `app/` – Next.js App Router pages (landing, chat)
-- `components/` – Reusable React components
-  - `landing/` – Landing page sections
-  - `speechUI/` – Voice chat interface components
-- `hooks/` – Custom React hooks for voice interaction
-- `styles/` – Tailwind CSS configuration
-
----
-
-## 🎙️ Voice Chat System
-
-Guardian features a **voice-first** interface that allows users to speak with the AI and receive spoken responses.
-
-### Architecture
-
-#### Core Components
-
-**1. useVoiceChat Hook** (`hooks/useVoiceChat.ts`)
-
-Central state management for voice interactions:
-
-- **State:** `messages`, `conversationState` (idle/listening/thinking/speaking), `isListening`, `isSpeaking`, `currentTranscript`, `isLoading`
-- **Actions:** `startVoiceInput()`, `stopVoiceInput()`, `sendMessage(text, confidence)`, `clearMessages()`
-
-**2. MicrophoneButton** (`components/speechUI/MicrophoneButton.tsx`)
-
-Interactive microphone control with:
-
-- Pulsing blue rings when listening
-- Red background when active
-- Three size variants (sm/md/lg)
-- Smooth Framer Motion animations
-
-**3. VoiceMessageBubble** (`components/speechUI/VoiceMessageBubble.tsx`)
-
-Message display with:
-
-- AI confidence scores (0-1 scale)
-- Urgency indicators (high/medium/low with color-coded borders)
-- Speaking animation with sound wave bars
-- Timestamps
-
-**4. GuardianAvatar** (`components/speechUI/GuardianAvatar.tsx`)
-
-Animated avatar with state-based animations:
-
-- **Idle:** Static state
-- **Listening:** Scales 1.3x with blue pulsing rings
-- **Thinking:** Pulse animation with rotating dots
-- **Speaking:** Scales 0.8-1.1x with green rings
-
-**5. LoadingIndicator** (`components/speechUI/LoadingIndicator.tsx`)
-
-AI thinking state with animated dots and customizable message.
-
-#### Web Speech API Integration
-
-- **Speech Recognition:** Browser's `SpeechRecognition` API for continuous listening with real-time transcription
-- **Speech Synthesis:** Browser's `SpeechSynthesis` API for AI voice responses with interruption support
-
-#### State Flow
-
-```
-1. User presses mic → isListening = true
-2. User speaks → transcript updates in real-time
-3. User stops → isListening = false
-4. Hook detects transcript → sends message
-5. conversationState = "thinking"
-6. AI responds → message added
-7. conversationState = "speaking"
-8. Speech synthesis plays response
-9. Playback ends → conversationState = "idle"
+```bash
+docker-compose up --build
 ```
 
-#### Usage
+This starts:
+- **Frontend:** `http://localhost:3000`
+- **Backend:** `http://localhost:8000`
 
-```tsx
-import SimpleVoiceChatContainer from "@/components/speechUI/SimpleVoiceChatContainer";
+### Build Individual Containers
+```bash
+# Backend
+docker build -t guardian-backend ./backend
+docker run -p 8000:8000 --env-file ./backend/.env guardian-backend
 
-export default function ChatPage() {
-  return <SimpleVoiceChatContainer />;
+# Frontend
+docker build -t guardian-frontend ./frontend
+docker run -p 3000:3000 --env-file ./frontend/.env.local guardian-frontend
+```
+
+---
+
+## ⚡ Supabase Setup & Migrations
+
+1.  **Create Project:** Go to [Supabase](https://supabase.com) and create a new project.
+2.  **Get Credentials:** Copy `Project URL` and `anon/public` key from Settings > API.
+3.  **Enable Vector Support:**
+    Run this in Supabase SQL Editor:
+    ```sql
+    create extension if not exists vector;
+    ```
+4.  **Run Migrations:**
+    Copy the content of `frontend/lib/database/conversations.sql` and run it in the SQL Editor. This creates:
+    - `profiles` table
+    - `conversations` table
+    - `messages` table
+    - `documents` table (for RAG)
+    - RLS Policies
+
+### Verify Setup
+Check that the `documents` table exists and has a `embedding` column of type `vector(768)`.
+
+---
+
+## 🔑 Environment Variables
+
+### Frontend (`frontend/.env.local`)
+```ini
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+### Backend (`backend/.env`)
+```ini
+# Supabase
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_service_role_key  # MUST be Service Role key for ingestion
+SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Google Gemini
+GOOGLE_API_KEY=your_gemini_api_key
+
+# Optional
+PORT=8000
+```
+
+> ⚠️ **SECURITY WARNING:** Never commit `.env` files. The backend requires the **Service Role Key** to perform vector ingestion (write access). The frontend should only use the **Anon Key**.
+
+---
+
+## 📡 API Reference
+
+### Chat Query
+**POST** `/api/agents/query`
+```json
+{
+  "query": "My child has a fever of 102",
+  "conversation_id": "optional-uuid",
+  "image_data": "base64-string-optional"
 }
 ```
 
-**Browser Compatibility:**
-
-- Chrome/Edge: Full support
-- Safari: Partial support (prefix required)
-- Firefox: Limited support
-- Mobile: iOS Safari, Chrome Android
-
----
-
-## 🏥 Data Sources
-
-Guardian retrieves medical information from:
-
-- **Supabase:** Stores curated medical documents, guidelines, and logs.
-- **Trusted Medical Datasets:** WHO, CDC, PubMed, and other vetted sources.
-- **Custom Uploads:** Allows admins to add new medical resources.
+### Ingest PDF (RAG)
+**POST** `/api/ingest/pdf`
+```bash
+curl -X POST -F "file=@manual.pdf" \
+     -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
+     http://localhost:8000/api/ingest/pdf
+```
 
 ---
 
-## 🚢 Deployment
+## 🧠 Ingestion & RAG
 
-- **Frontend:** Deployed on Vercel for global scalability and performance.
-- **Backend:** Deployed on Render with Docker for reliability and easy scaling.
-- **Environment Variables:** Store API keys and secrets securely in Vercel/Render dashboards.
+Guardian uses a **RAG Lookup Agent** to ground answers in reality.
+1.  **Ingestion:** PDFs are chunked, embedded (Gemini Embeddings), and stored in Supabase.
+2.  **Retrieval:** The agent searches for semantically similar chunks using `pgvector`.
+3.  **Synthesis:** The LLM generates an answer using the retrieved context.
+
+**Test RAG:**
+Upload a specific medical protocol PDF and ask a question about a unique detail in it. Guardian will cite the document.
 
 ---
 
-## ⚠️ Disclaimer
+## 🔐 Authentication & Session Management
 
-Guardian is an AI-powered tool for educational and research purposes only. It does **not** replace professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider for medical emergencies.
+- **Supabase Auth:** Handles secure user management.
+- **Guest Mode:** Allows immediate access without signup (stored in `localStorage`).
+- **Session Persistence:** Users stay logged in; chat history is saved to the database.
+- **Google OAuth:** One-click login supported.
+
+---
+
+## 🤖 Agents & Routing
+
+The brain of Guardian is the **Agent Router**. It analyzes every query and activates the right team:
+
+| Agent | Role |
+| :--- | :--- |
+| **SafetyAgent** | 🛡️ Checks for self-harm, violence, or illegal content. |
+| **TriageAgent** | 🚑 Determines urgency (Red/Yellow/Green). |
+| **SymptomsAgent** | 📋 Extracts structured symptom data. |
+| **FirstAidAgent** | 🩹 Provides step-by-step care instructions. |
+| **PediatricAgent** | 👶 Specialized logic for children (dosages, red flags). |
+| **ImageAnalysisAgent** | 👁️ Analyzes uploaded medical images. |
+| **RAGLookupAgent** | 📚 Searches medical database for protocols. |
+
+---
+
+## 🧪 Testing & Troubleshooting
+
+### Running Tests
+```bash
+cd backend
+pytest tests/
+```
+
+### Common Issues
+- **"Relation 'conversations' does not exist"**: Run the SQL migration in Supabase.
+- **Microphone not working**: Allow permission in browser. Safari requires a click to start audio context.
+- **Docker build fails**: Ensure `.env` files are present before building.
+
+---
+
+## 🛡️ Security & Compliance
+
+- **Data Privacy:** Chat history is RLS-protected (users only see their own data).
+- **Safety Guardrails:** The Safety Agent intercepts harmful queries *before* processing.
+- **Disclaimer:** The UI prominently displays that this is an AI assistant, not a doctor.
+
+---
+
+## 🏆 Kaggle Submission Checklist
+
+- [x] **Pitch:** "Guardian: Your AI-powered emergency medical assistant."
+- [x] **Implementation:** Fully functional multi-agent system with Voice & Vision.
+- [x] **Bonus:** Used Gemini 1.5 Pro, RAG, and Agentic Workflow.
+- [x] **Video:** Demo video included.
+- [x] **Code:** Clean, documented, and Dockerized.
+
+**Course Concepts Applied:**
+1.  **Multi-Agent Systems:** Router + specialized sub-agents.
+2.  **Tool Use:** Agents use RAG and Vision tools.
+3.  **Context Engineering:** Managing conversation history and medical context.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT License - Created by **Tejas Naik** for the Google AI Agents Hackathon.
 
-### Backend Architecture Diagram
-
-```mermaid
-graph TD
-U[User] --> API[API Endpoint]
-API --> O[Main Orchestrator / Router]
-O --> RAG[RAGLookupAgent]
-O --> IMG[ImageAnalysisAgent]
-O --> SYM[SymptomsAgent]
-O --> TRI[TriageAgent]
-O --> FA[FirstAidAgent]
-O --> PED[PediatricAgent]
-O --> SAF[SafetyAgent]
-
-    RAG --> VDB[Vector DB: Supabase / pgvector]
-    RAG --> META[Supabase Metadata]
-    IMG --> IMGPROC[Image Processing Tool]
-    IMG --> GEM[Gemini Model]
-    SYM --> SYMEXT[Symptom Extraction Tool]
-    TRI --> TRIAGE[Triage Rules DB]
-    FA --> VDB
-    PED --> VDB
-    SAF --> META
-
-    RAG --> O
-    IMG --> O
-    SYM --> O
-    TRI --> O
-    FA --> O
-    PED --> O
-    SAF --> O
-
-    O --> GEM
-    GEM --> U
-```
+---
