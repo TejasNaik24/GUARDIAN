@@ -12,11 +12,9 @@
 
 ## 📸 Architecture & Design
 
-![System Architecture](docs/system_architecture_overview.png)
-*System Architecture Overview*
+<img width="505" height="329" alt="Screenshot 2025-12-01 at 1 00 48 AM" src="https://github.com/user-attachments/assets/a8cffc68-ecc2-4a5e-bdf0-a65e87987385" />
 
-![Sub-Agent Architecture](docs/sub_agent_architecture_diagram.png)
-*Multi-Agent Reasoning Flow*
+<img width="634" height="182" alt="Screenshot 2025-11-30 at 11 25 44 PM" src="https://github.com/user-attachments/assets/a9bf0937-8a82-43be-b2ea-80e2f87b9db0" />
 
 > **Note:** High-resolution diagrams are available in the `/docs` folder.
 
