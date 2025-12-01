@@ -25,7 +25,11 @@ interface Message {
 
 type ConversationState = "idle" | "listening" | "thinking" | "speaking";
 
-export default function VoiceChatContainer() {
+interface VoiceChatContainerProps {
+  onSidebarToggle?: () => void;
+}
+
+export default function VoiceChatContainer({ onSidebarToggle }: VoiceChatContainerProps) {
   const { isGuest, session } = useAuth();
   const { chat } = useGuardianRAG();
   const { messages: contextMessages, currentConversation } = useConversation();
@@ -773,26 +777,38 @@ export default function VoiceChatContainer() {
       onDrop={handleDrop}
     >
       {/* Header */}
-      <header className="bg-white border-b border-[#E5E7EB] pl-2 pr-4 md:pr-6 py-2 shadow-sm">
+      <header className="bg-white border-b border-[#E5E7EB] pl-2 pr-3 md:pr-6 py-2 shadow-sm sticky top-0 z-30">
         <div className="w-full flex items-center justify-between">
           {/* Guardian Text & Logo */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 min-w-0">
+            {/* Mobile Sidebar Toggle */}
+            {!isGuest && (
+              <button
+                onClick={onSidebarToggle}
+                className="md:hidden p-2 mr-1 text-gray-600 hover:bg-gray-100 rounded-lg shrink-0"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            )}
+
             <img
               src="/images/guardian-logo.png"
               alt="GUARDIAN Logo"
-              className="w-[56px] h-[56px] object-contain"
+              className="w-[32px] h-[32px] md:w-[56px] md:h-[56px] object-contain shrink-0"
             />
-            <h1 className="text-lg font-semibold text-[#1E3A8A]">GUARDIAN</h1>
+            <h1 className="text-lg font-semibold text-[#1E3A8A] hidden md:block truncate">GUARDIAN</h1>
           </div>
 
           {/* Mode Toggle and Auth Buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 shrink-0">
             {/* Login/Signup Buttons - only show for guests */}
             {isGuest && (
-              <div className="bg-white rounded-full px-2 py-2 shadow-md border border-[#E5E7EB] inline-flex items-center gap-2">
+              <div className="bg-white rounded-full px-1.5 py-1.5 md:px-2 md:py-2 shadow-md border border-[#E5E7EB] inline-flex items-center gap-1 md:gap-2 shrink-0">
                 <button
                   onClick={() => setShowAuthModal(true)}
-                  className="px-3 py-1.5 text-xs font-medium text-[#64748B] hover:text-[#1E3A8A] rounded-full transition-colors cursor-pointer"
+                  className="px-2 py-1 md:px-3 md:py-1.5 text-[10px] md:text-xs font-medium text-[#64748B] hover:text-[#1E3A8A] rounded-full transition-colors cursor-pointer whitespace-nowrap"
                 >
                   Log in
                 </button>
@@ -801,10 +817,9 @@ export default function VoiceChatContainer() {
                     setAuthMode("signup");
                     setShowAuthModal(true);
                   }}
-                  className="relative px-3 py-1.5 rounded-full text-xs font-medium text-white transition-all cursor-pointer"
+                  className="px-3 py-1 md:px-4 md:py-1.5 text-[10px] md:text-xs font-medium bg-[#1E3A8A] text-white rounded-full hover:bg-[#172554] transition-colors shadow-sm cursor-pointer whitespace-nowrap"
                 >
-                  <div className="absolute inset-0 bg-linear-to-br from-[#1E3A8A] to-[#3B82F6] rounded-full" />
-                  <span className="relative z-10">Sign up</span>
+                  Sign up
                 </button>
               </div>
             )}

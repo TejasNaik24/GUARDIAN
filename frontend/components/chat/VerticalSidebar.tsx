@@ -10,11 +10,15 @@ import { ConversationListItem } from "./ConversationListItem";
 interface VerticalSidebarProps {
   isExpanded: boolean;
   onToggle: () => void;
+  isMobile?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export function VerticalSidebar({
   isExpanded,
   onToggle,
+  isMobile,
+  onCloseMobile,
 }: VerticalSidebarProps) {
   const { isGuest, user } = useAuth();
   const {
@@ -28,16 +32,104 @@ export function VerticalSidebar({
 
   const handleNewChat = async () => {
     await createConversation();
+    if (isMobile && onCloseMobile) onCloseMobile();
   };
 
   // Only show sidebar for logged-in users
   if (!user) return null;
 
+  // Mobile Overlay Logic
+  if (isMobile) {
+    return (
+      <AnimatePresence>
+        {isExpanded && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={onCloseMobile}
+              className="fixed inset-0 bg-black z-[190]"
+            />
+
+            {/* Sidebar Drawer */}
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed left-0 top-0 h-full w-[280px] bg-[#f9f9f9] border-r border-gray-200 flex flex-col py-4 z-[200] shadow-xl"
+            >
+              {/* Close Button for Mobile */}
+              <div className="px-3 mb-4 flex justify-end">
+                <button onClick={onCloseMobile} className="p-2 text-gray-500 hover:bg-gray-200 rounded-full">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* New Chat Button */}
+              <div className="px-3 mb-3 w-full">
+                <button
+                  onClick={handleNewChat}
+                  className="w-full h-10 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer text-white font-medium"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  New Chat
+                </button>
+              </div>
+
+              {/* Chat History */}
+              <div className="px-3 mb-2">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Chat History</h3>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-3 space-y-1">
+                {loading && conversations.length === 0 ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : conversations.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-xs">No conversations yet</p>
+                  </div>
+                ) : (
+                  conversations.map((conv) => (
+                    <ConversationListItem
+                      key={conv.id}
+                      conversation={conv}
+                      isActive={currentConversation?.id === conv.id}
+                      onSelect={() => {
+                        selectConversation(conv.id);
+                        if (onCloseMobile) onCloseMobile();
+                      }}
+                      onDelete={() => deleteConversation(conv.id)}
+                    />
+                  ))
+                )}
+              </div>
+
+              {/* User Profile */}
+              <div className="mt-auto pt-4 border-t border-gray-200 px-3">
+                <UserProfileMenu isExpanded={true} />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    );
+  }
+
+  // Desktop Sidebar (Existing Logic)
   return (
     <motion.div
       animate={{ width: isExpanded ? 240 : 64 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="fixed left-0 top-0 h-full bg-[#f9f9f9] border-r border-gray-200 flex flex-col py-4 z-[200]"
+      className="fixed left-0 top-0 h-full bg-[#f9f9f9] border-r border-gray-200 flex flex-col py-4 z-[200] hidden md:flex"
     >
       {/* Spacer to keep buttons in position */}
       <div className="mb-3 pl-1 h-[60px]" />

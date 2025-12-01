@@ -55,6 +55,9 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
     const [isVoiceMode, setIsVoiceMode] = useState(false);
     const [isMicMuted, setIsMicMuted] = useState(true);
 
+    // Ref to keep utterance alive (prevent GC)
+    const currentUtteranceRef = React.useRef<SpeechSynthesisUtterance | null>(null);
+
     // Sync listening state to our internal state
     useEffect(() => {
         if (listening && state !== 'speaking' && state !== 'greeting') {
@@ -85,84 +88,89 @@ export function SpeechProvider({ children }: { children: React.ReactNode }) {
             resetTranscript();
 
             // 2. Trigger permission by starting and immediately stopping
+            // We await this sequence to ensure audio context is ready/cleared for TTS
             console.log("🎤 [Speech] Triggering mic permission...");
             try {
                 await SpeechRecognition.startListening();
-                // Wait a bit longer to ensure the prompt has a chance to appear/register
-                setTimeout(() => {
-                    console.log("🎤 [Speech] Stopping mic after permission trigger");
-                    SpeechRecognition.stopListening();
-                }, 500);
+                await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
+                console.log("🎤 [Speech] Stopping mic after permission trigger");
+                await SpeechRecognition.stopListening();
             } catch (e) {
                 console.error("❌ [Speech] Permission trigger failed", e);
             }
 
-            // 3. Play Greeting
+            // 3. Play Greeting (Only after mic interaction is done)
             console.log("🗣️ [Speech] Preparing greeting...");
             setState('greeting');
 
-            // Robust Voice Loading
-            const loadVoices = (): Promise<SpeechSynthesisVoice[]> => {
-                return new Promise((resolve) => {
-                    let voices = window.speechSynthesis.getVoices();
-                    if (voices.length > 0) {
-                        resolve(voices);
-                        return;
-                    }
+            const playGreeting = () => {
+                const text = "How may I assist you?";
+                const utterance = new SpeechSynthesisUtterance(text);
 
-                    console.log("⏳ [Speech] Waiting for voices...");
-                    const onVoicesChanged = () => {
-                        voices = window.speechSynthesis.getVoices();
-                        console.log(`✅ [Speech] Voices loaded: ${voices.length}`);
-                        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
-                        resolve(voices);
-                    };
+                // Store in ref to prevent GC
+                currentUtteranceRef.current = utterance;
 
-                    window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
+                utterance.lang = "en-US";
 
-                    // Fallback timeout in case voiceschanged never fires
-                    setTimeout(() => {
-                        voices = window.speechSynthesis.getVoices();
-                        console.log(`⚠️ [Speech] Voice load timeout. Voices found: ${voices.length}`);
-                        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
-                        resolve(voices);
-                    }, 2000);
-                });
+                // Simple voice selection
+                const voices = window.speechSynthesis.getVoices();
+                if (voices.length > 0) {
+                    const englishVoice = voices.find(v => v.lang.includes('en-US')) || voices.find(v => v.lang.includes('en'));
+                    if (englishVoice) utterance.voice = englishVoice;
+                }
+
+                utterance.onstart = () => console.log("🗣️ [Speech] Greeting started");
+                utterance.onend = () => {
+                    console.log("✅ [Speech] Greeting completed. Staying muted.");
+                    setState('idle');
+                    SpeechRecognition.stopListening();
+                    currentUtteranceRef.current = null; // Cleanup
+                };
+                utterance.onerror = (e) => {
+                    console.error("❌ [Speech] Greeting TTS Error:", e);
+                    currentUtteranceRef.current = null;
+                };
+
+                // Cancel any pending speech to clear queue
+                window.speechSynthesis.cancel();
+
+                // Small delay to ensure cancel takes effect
+                setTimeout(() => {
+                    console.log("▶️ [Speech] Playing greeting...");
+                    window.speechSynthesis.speak(utterance);
+                }, 50);
             };
 
-            const voices = await loadVoices();
+            // Retry if voices aren't loaded yet (Chrome quirk)
+            if (window.speechSynthesis.getVoices().length === 0) {
+                console.log("⏳ [Speech] Voices not loaded, waiting...");
 
-            // Create utterance
-            const text = "How may I assist you?";
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = "en-US";
+                let hasPlayed = false;
+                let fallbackTimer: NodeJS.Timeout;
 
-            // Explicitly set an English voice if available (helps Chrome)
-            const englishVoice = voices.find(v => v.lang.includes('en-US')) || voices.find(v => v.lang.includes('en'));
-            if (englishVoice) {
-                utterance.voice = englishVoice;
-                console.log(`🗣️ [Speech] Using voice: ${englishVoice.name}`);
+                const cleanup = () => {
+                    hasPlayed = true;
+                    window.speechSynthesis.onvoiceschanged = null;
+                    if (fallbackTimer) clearTimeout(fallbackTimer);
+                };
+
+                window.speechSynthesis.onvoiceschanged = () => {
+                    if (hasPlayed) return;
+                    console.log("✅ [Speech] Voices changed, playing greeting");
+                    cleanup();
+                    playGreeting();
+                };
+
+                // Fallback if event doesn't fire
+                fallbackTimer = setTimeout(() => {
+                    if (hasPlayed) return;
+                    console.log("⚠️ [Speech] Voice load timeout, playing anyway");
+                    cleanup();
+                    playGreeting();
+                }, 1000);
             } else {
-                console.log("⚠️ [Speech] No English voice found, using default");
+                playGreeting();
             }
-
-            utterance.onstart = () => console.log("🗣️ [Speech] Greeting started");
-
-            utterance.onend = () => {
-                // 4. Stay muted (Idle) after greeting
-                console.log("✅ [Speech] Greeting completed. Staying muted.");
-                setState('idle'); // Idle = Muted/Static
-                SpeechRecognition.stopListening();
-            };
-
-            utterance.onerror = (e) => console.error("❌ [Speech] Greeting TTS Error:", e);
-
-            // Chrome fix: cancel then wait a tiny bit
-            window.speechSynthesis.cancel();
-            setTimeout(() => {
-                console.log("▶️ [Speech] Playing greeting...");
-                window.speechSynthesis.speak(utterance);
-            }, 100);
 
         } else {
             // Exiting voice mode
