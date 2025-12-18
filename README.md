@@ -1,12 +1,9 @@
 # Guardian AI - Emergency Medical Assistant
 
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
-![License](https://img.shields.io/badge/license-MIT-blue)
 ![Status](https://img.shields.io/badge/status-production--ready-success)
 
 > **Guardian** is an advanced, multi-agent AI system designed to provide real-time, voice-activated emergency medical triage and first aid guidance. It combines the power of Google Gemini, RAG (Retrieval-Augmented Generation), and computer vision to assist users in critical situations.
-
-**Check out the project [here!](https://guardian-lac-phi.vercel.app/)**
 
 ---
 
@@ -314,26 +311,5 @@ pytest tests/
 - **Data Privacy:** Chat history is RLS-protected (users only see their own data).
 - **Safety Guardrails:** The Safety Agent intercepts harmful queries *before* processing.
 - **Disclaimer:** The UI prominently displays that this is an AI assistant, not a doctor.
-
----
-
-## 🏆 Kaggle Submission Checklist
-
-- [x] **Pitch:** "Guardian: Your AI-powered emergency medical assistant."
-- [x] **Implementation:** Fully functional multi-agent system with Voice & Vision.
-- [x] **Bonus:** Used Gemini 1.5 Pro, RAG, and Agentic Workflow.
-- [x] **Video:** Demo video included.
-- [x] **Code:** Clean, documented, and Dockerized.
-
-**Course Concepts Applied:**
-1.  **Multi-Agent Systems:** Router + specialized sub-agents.
-2.  **Tool Use:** Agents use RAG and Vision tools.
-3.  **Context Engineering:** Managing conversation history and medical context.
-
----
-
-## 📄 License
-
-MIT License - Created by **Tejas Naik** for the Google AI Agents Hackathon.
 
 ---
